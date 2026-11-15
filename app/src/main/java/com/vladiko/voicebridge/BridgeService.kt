@@ -821,68 +821,12 @@ class BridgeService : Service() {
         say(l.mapIndexed { i, p -> "${ord[i]}, ${spoken(p.second)}" }.joinToString(". "))
     }
 
-    // v0.59: сопоставление СКАЗАННОГО имени со списком сессий. Имена проектов латиницей
-    // («brainstorm»), а юзер произносит их по-русски, и whisper коверкает: «бренштурм»,
-    // «бренч-торм», «войсбридж». Поэтому: кириллицу переводим в латиницу по звучанию и
-    // сравниваем расстоянием Левенштейна с допуском в половину длины — а вслух рация всё
-    // равно подтверждает выбор, так что промах слышен сразу и стоит одну команду.
-    private fun translit(x: String): String {
-        val m = mapOf(
-            'а' to "a", 'б' to "b", 'в' to "v", 'г' to "g", 'д' to "d", 'е' to "e", 'ё' to "e",
-            'ж' to "zh", 'з' to "z", 'и' to "i", 'й' to "i", 'к' to "k", 'л' to "l", 'м' to "m",
-            'н' to "n", 'о' to "o", 'п' to "p", 'р' to "r", 'с' to "s", 'т' to "t", 'у' to "u",
-            'ф' to "f", 'х' to "h", 'ц' to "c", 'ч' to "ch", 'ш' to "sh", 'щ' to "sch",
-            'ъ' to "", 'ы' to "y", 'ь' to "", 'э' to "e", 'ю' to "yu", 'я' to "ya"
-        )
-        val sb = StringBuilder()
-        for (c in x.lowercase()) {
-            val t = m[c]
-            when {
-                t != null -> sb.append(t)
-                c.isLetterOrDigit() -> sb.append(c)
-            }
+    private fun matchSessionByName(spoken: String): Pair<String, String>? {
+        val candidates = SessionBook.all().map {
+            SessionNameMatcher.Candidate(it.sid, it.proj.ifEmpty { it.sid })
         }
-        return sb.toString()
-    }
-
-    private fun lev(a: String, b: String): Int {
-        if (a.isEmpty()) return b.length
-        if (b.isEmpty()) return a.length
-        var prev = IntArray(b.length + 1) { it }
-        for (i in 1..a.length) {
-            val cur = IntArray(b.length + 1)
-            cur[0] = i
-            for (j in 1..b.length) {
-                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
-                cur[j] = minOf(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
-            }
-            prev = cur
-        }
-        return prev[b.length]
-    }
-
-    private fun matchSessionByName(spoken0: String): Pair<String, String>? {
-        // Пробуем и всю фразу, и КАЖДОЕ слово по отдельности: whisper коверкает служебные
-        // слова тоже («сессию» → «сетсию»), и мусорное слово рядом с именем портило бы счёт.
-        val parts = (listOf(spoken0) + spoken0.split(' ')).map { translit(it) }.filter { it.length >= 3 }
-        if (parts.isEmpty()) return null
-        var best: Pair<String, String>? = null
-        var bestScore = 1.0
-        for (e in SessionBook.all().sortedByDescending { it.lastTs }.take(10)) {
-            val cand = translit(e.proj.ifEmpty { e.sid })
-            if (cand.isEmpty()) continue
-            for (said in parts) {
-                // сравниваем и целиком, и по общему префиксу той же длины: «бренштурм» против
-                // «brainstorm» даёт заметное расстояние на хвосте, а начало совпадает хорошо
-                val head = minOf(said.length, cand.length)
-                val d = minOf(
-                    lev(said, cand).toDouble() / maxOf(said.length, cand.length),
-                    lev(said.take(head), cand.take(head)).toDouble() / head
-                )
-                if (d < bestScore) { bestScore = d; best = e.sid to e.proj.ifEmpty { e.sid.take(4) } }
-            }
-        }
-        return if (bestScore <= 0.5) best else null
+        val hit = SessionNameMatcher.match(spoken, candidates) ?: return null
+        return hit.sid to hit.name
     }
 
     private fun switchByName(said: String) {

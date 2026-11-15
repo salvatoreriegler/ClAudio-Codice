@@ -34,8 +34,11 @@ object ItalianCommands {
         val n = numbers[numeric] ?: numeric.takeIf { it.matches(Regex("[1-9]")) }?.toInt()
         if (n != null) return Command("switch", n)
         if (numeric.matches(Regex("\\d+"))) return null
-        val name = Regex("^(?:sessione|canale) ([a-z0-9]+(?: [a-z0-9]+){0,3})$")
-            .matchEntire(target)?.groupValues?.get(1) ?: return null
+        // Bare names use "passa a NAME". Keep unrelated phrases such as
+        // "passa al branch main" out of the navigation command grammar.
+        val name = Regex("^(?:sessione|canale) (.+)$").matchEntire(target)?.groupValues?.get(1)
+            ?: if (Regex("^(?:passa|vai) a ").containsMatchIn(s)) target else return null
+        if (!name.matches(Regex("[a-z0-9]+(?: [a-z0-9]+){0,11}"))) return null
         if (Regex("\\b(?:e|poi|quindi)\\b").containsMatchIn(name)) return null
         return Command("switch", name = name)
     }

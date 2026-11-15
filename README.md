@@ -25,6 +25,8 @@ Pronuncia il comando come frase autonoma. Con il riconoscitore Android, attiva *
 | «Elenca le sessioni» | Legge le quattro sessioni più recenti con il loro numero. |
 | «Passa alla seconda» | Seleziona la seconda sessione dell'elenco. |
 | «Passa alla seconda sessione» | Stessa selezione. |
+| «Passa a SECURDOC 1» / «Passa a SECURDOC uno» | Seleziona la chat per nome, anche con prefissi Windows/WSL. |
+| «Vai a Collaudo 1» | Stesso cambio per nome. |
 | «Passa alla sessione contabilità» | Cerca il canale per nome. Ascolta la conferma del destinatario. |
 | «Torna in automatico» | Rimuove scelta esplicita e filtro dei canali. |
 | «Invia» / «Invia per favore» | Invia la bozza dettata. |
@@ -33,6 +35,7 @@ Pronuncia il comando come frase autonoma. Con il riconoscitore Android, attiva *
 
 Le parole dentro una frase normale, come «il programma invia i dati», restano testo.
 Per cambiare canale a voce, invia o annulla prima la bozza. La numerazione segue l'ultimo elenco letto per tre minuti e non è un identificativo permanente.
+Per i nomi non serve pronunciare prefissi tecnici o identificativi. Se più chat corrispondono al nome, l'app mantiene il destinatario corrente e legge l'elenco.
 
 ## Collegamenti
 

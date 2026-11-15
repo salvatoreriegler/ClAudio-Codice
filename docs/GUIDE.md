@@ -19,7 +19,9 @@ Con Android, «invia» deve essere riconosciuto come frase separata: fai una pau
 
 Per cambiare a voce, termina prima la bozza e pronuncia «elenca le sessioni», poi «passa alla seconda sessione». La numerazione segue l'ultimo elenco letto per tre minuti; senza elenco recente usa le quattro sessioni più recenti.
 
-Puoi dire «passa alla sessione contabilità»: il confronto dei nomi tollera differenze, quindi ascolta la conferma del destinatario. **Torna in automatico** azzera destinatario esplicito e filtro di ascolto.
+Puoi dire direttamente **«passa a SECURDOC 1»**, **«passa a SECURDOC uno»** oppure **«vai a Collaudo 1»**. Restano valide le forme «passa al canale SECURDOC 1» e «passa alla sessione contabilità». Non occorre pronunciare i prefissi Windows/WSL o il codice fra parentesi quadre.
+
+Il nome completo ha precedenza: «RARE Dashboard» e «RARE Dashboard fork» indicano chat diverse. Se il nome è ambiguo, il destinatario rimane invariato e l'app legge l'elenco: scegli per numero o usa **canali → rispondi**. Ascolta sempre la conferma del destinatario. **Torna in automatico** azzera destinatario esplicito e filtro di ascolto.
 
 Con Android, una richiesta di navigazione durante una bozza rimane testo. Con Whisper, la navigazione deve occupare l'intera dettatura. Invia o annulla prima di cambiare canale.
 

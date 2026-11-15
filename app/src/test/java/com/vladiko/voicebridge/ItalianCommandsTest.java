@@ -81,4 +81,36 @@ public class ItalianCommandsTest {
         Context ctx = RuntimeEnvironment.getApplication();
         assertEquals("ClAudio Codice", ctx.getApplicationInfo().loadLabel(ctx.getPackageManager()));
     }
+    @Test public void shortNameSelectsWslChatWithoutSendingTheCommand() throws Exception {
+        Context ctx = RuntimeEnvironment.getApplication();
+        SessionBook.INSTANCE.seen(ctx, "securdoc-2", "Claude - SECURDOC 2 [2d9dd9a6]", 4000L);
+        SessionBook.INSTANCE.seen(ctx, "securdoc-1", "Claude WSL Ubuntu - SECURDOC 1 [98f0e69c]", 3000L);
+        say("passa a SECURDOC 1");
+        assertEquals("securdoc-1", Cfg.INSTANCE.getReplyTarget());
+        assertEquals("", draft().toString());
+    }
+    @Test public void spokenNumberSelectsWindowsChat() throws Exception {
+        SessionBook.INSTANCE.seen(RuntimeEnvironment.getApplication(), "prima-2", "Claude - PRIMA 2 [ca178f4e]", 3000L);
+        say("vai a PRIMA due");
+        assertEquals("prima-2", Cfg.INSTANCE.getReplyTarget());
+        assertEquals("", draft().toString());
+    }
+    @Test public void ambiguousNameKeepsTheCurrentRecipient() throws Exception {
+        Context ctx = RuntimeEnvironment.getApplication();
+        SessionBook.INSTANCE.seen(ctx, "securdoc-windows", "Claude - SECURDOC 1 [cecf6aca]", 3000L);
+        SessionBook.INSTANCE.seen(ctx, "securdoc-wsl", "Claude WSL Ubuntu - SECURDOC 1 [98f0e69c]", 4000L);
+        Cfg.INSTANCE.setReplyTarget("session-a");
+        say("passa a SECURDOC 1");
+        assertEquals("session-a", Cfg.INSTANCE.getReplyTarget());
+        assertEquals("", draft().toString());
+    }
+    @Test public void shortNameDoesNotDiscardOrRedirectAnExistingDraft() throws Exception {
+        SessionBook.INSTANCE.seen(RuntimeEnvironment.getApplication(), "securdoc-1", "Claude WSL Ubuntu - SECURDOC 1 [98f0e69c]", 3000L);
+        Cfg.INSTANCE.setReplyTarget("session-a");
+        draft().append("Correggi il bug.");
+        say("passa a SECURDOC 1");
+        assertEquals("session-a", Cfg.INSTANCE.getReplyTarget());
+        assertTrue(draft().toString().startsWith("Correggi il bug."));
+        assertTrue(draft().toString().contains("passa a SECURDOC 1"));
+    }
 }

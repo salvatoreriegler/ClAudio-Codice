@@ -27,10 +27,11 @@ function parseRadioCommand(text) {
   const n = numbers[numeric] || (/^[1-9]$/.test(numeric) ? Number(numeric) : 0);
   if (n) return {cmd: 'switch', n};
   if (/^\d+$/.test(numeric)) return null;
-  // Naming a session explicitly keeps "passa al branch main" a normal message.
-  m = target.match(/^(?:sessione|canale) ([a-z0-9]+(?: [a-z0-9]+){0,3})$/);
-  if (!m || /\b(?:e|poi|quindi)\b/.test(m[1])) return null;
-  return {cmd: 'switch', n: 0, name: m[1]};
+  // Bare names use "passa a NAME"; "passa al branch main" remains prose.
+  m = target.match(/^(?:sessione|canale) (.+)$/);
+  const name = m ? m[1] : /^(?:passa|vai) a /.test(s) ? target : '';
+  if (!/^[a-z0-9]+(?: [a-z0-9]+){0,11}$/.test(name) || /\b(?:e|poi|quindi)\b/.test(name)) return null;
+  return {cmd: 'switch', n: 0, name};
 }
 
 // Whisper can transcribe several sentences in one recording. Strip only a final,

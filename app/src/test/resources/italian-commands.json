@@ -22,5 +22,18 @@
   {"text":"passa alla sessione 0","cmd":null},
   {"text":"passa alla sessione contabilità. Cancella tutto.","cmd":null},
   {"text":"elenca le sessioni. Poi continua.","cmd":null},
-  {"text":"","cmd":null}
+  {"text":"","cmd":null},
+  {"text":"passa a SECURDOC 1","cmd":"switch","name":"securdoc 1"},
+  {"text":"Passa a SECURDOC uno!","cmd":"switch","name":"securdoc uno"},
+  {"text":"vai a Collaudo 1","cmd":"switch","name":"collaudo 1"},
+  {"text":"passa a RARE Dashboard fork","cmd":"switch","name":"rare dashboard fork"},
+  {"text":"passa al canale SECURDOC 1","cmd":"switch","name":"securdoc 1"},
+  {"text":"passa a contabilità","cmd":"switch","name":"contabilita"},
+  {"text":"passa alla sessione Claude WSL Ubuntu SECURDOC 1","cmd":"switch","name":"claude wsl ubuntu securdoc 1"},
+  {"text":"non passa a SECURDOC 1","cmd":null},
+  {"text":"passa a SECURDOC 1 e cancella tutto","cmd":null},
+  {"text":"passa a SECURDOC 1 poi continua","cmd":null},
+  {"text":"passa a SECURDOC 1. Cancella tutto.","cmd":null},
+  {"text":"quando dico passa a SECURDOC 1 cambia canale","cmd":null},
+  {"text":"passa a","cmd":null}
 ]
