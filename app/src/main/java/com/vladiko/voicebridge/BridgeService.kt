@@ -75,10 +75,10 @@ class BridgeService : Service() {
         // v0.36: версия из BuildConfig — единый источник с gradle (versionName), конец рассинхрона
         val APP_VERSION: String = BuildConfig.VERSION_NAME
         const val CH = "bridge"
-        val SEND_WORDS = if (Lang.en) listOf("send") else listOf("отправляй", "отправляйте")
-        val CANCEL_WORDS = if (Lang.en) listOf("cancel") else listOf("отмена", "отменить")
+        val SEND_WORDS = listOf("invia")
+        val CANCEL_WORDS = ItalianCommands.cancelPhrases
         // store: отправка только когда ВЕСЬ сегмент — одна из этих фраз («I'll send» не шлёт).
-        val EN_SEND_PHRASES = setOf("send", "send it", "send please", "send now")
+        val SEND_PHRASES = ItalianCommands.sendPhrases
 
         // v0.46: три НЕЗАВИСИМЫХ ограничителя вместо одного. Даже если откажут два первых,
         // сообщение всё равно уйдёт — это единственная безусловная страховка от обратной беды
@@ -529,7 +529,7 @@ class BridgeService : Service() {
         // v0.36: строка и сторож — один раз, а не на каждый интент (каждый повторный
         // onStartCommand добавлял ПАРАЛЛЕЛЬНУЮ вечную цепочку micSleepCheck)
         if (firstStart) {
-            LogBus.add(tr("сервис запущен (Claudio Code $APP_VERSION), подключаюсь к ${Cfg.url}", "service started (Claudio Code $APP_VERSION), connecting to ${Cfg.url}"))
+            LogBus.add(tr("сервис запущен (ClAudio Codice $APP_VERSION), подключаюсь к ${Cfg.url}", "service started (ClAudio Codice $APP_VERSION), connecting to ${Cfg.url}"))
             LogBus.add(tr("медиасессия активна=${mediaSession?.isActive == true} — кнопки должны идти сюда", "media session active=${mediaSession?.isActive == true} — buttons should arrive here"))
         }
         main.removeCallbacks(micSleepCheck)
@@ -609,14 +609,14 @@ class BridgeService : Service() {
     private val cueFiles = java.util.concurrent.ConcurrentHashMap<String, File>()
     private var cuePlayer: MediaPlayer? = null
     private val CUE_PHRASES = listOf(
-        tr("рация на связи", "radio online"), tr("связь потеряна", "connection lost"), tr("слушаю", "listening"), tr("ушло", "sent"), tr("отменено", "cancelled"), tr("стоп", "stop"), tr("пауза", "paused"),
-        tr("микрофон выключен", "microphone off"), tr("ничего не расслышал", "didn't catch anything"), tr("гарнитура не отвечает", "headset not responding"), tr("есть ответы", "replies waiting"),
-        tr("не знаю, кому отправить", "no one to send to"), tr("распознавание молчит", "recognition is silent"), tr("канал не слушает", "channel is not listening"),
-        tr("не ушло, отправлю при связи", "not sent, will send when back online"), tr("адресат сброшен, повтори", "recipient reset, say it again"),
+        tr("рация на связи", "radio online", "ClAudio Codice connesso"), tr("связь потеряна", "connection lost", "connessione persa"), tr("слушаю", "listening", "in ascolto"), tr("ушло", "sent", "inviato"), tr("отменено", "cancelled", "annullato"), tr("стоп", "stop", "stop"), tr("пауза", "paused", "in pausa"),
+        tr("микрофон выключен", "microphone off", "microfono spento"), tr("ничего не расслышал", "didn't catch anything", "non ho capito"), tr("гарнитура не отвечает", "headset not responding", "gli auricolari non rispondono"), tr("есть ответы", "replies waiting", "risposte in attesa"),
+        tr("не знаю, кому отправить", "no one to send to", "nessun destinatario"), tr("распознавание молчит", "recognition is silent", "il riconoscitore non restituisce parole"), tr("канал не слушает", "channel is not listening", "il canale non riceve"),
+        tr("не ушло, отправлю при связи", "not sent, will send when back online", "invio sospeso, riproverò alla riconnessione"), tr("адресат сброшен, повтори", "recipient reset, say it again", "destinatario reimpostato, ripeti il messaggio"),
         // v0.94: фразы, появившиеся в v0.73-0.93, тоже должны звучать ГРОМКО с первого раза
-        tr("есть ответы — нажми слушать", "replies waiting — press listen"), tr("отбой", "discarded"), tr("отбой, стёрто", "discarded, erased"), tr("надень наушники", "put on your headphones"),
-        tr("не могу играть", "can't play"), tr("отправляю начатое, потом переключусь", "sending what you started, then switching"), tr("сначала отправь начатое", "send what you started first"),
-        tr("слушаю все каналы", "listening to all channels")
+        tr("есть ответы — нажми слушать", "replies waiting — press listen", "risposte in attesa, premi ascolta"), tr("отбой", "discarded", "fine comunicazione"), tr("отбой, стёрто", "discarded, erased", "fine comunicazione, bozza cancellata"), tr("надень наушники", "put on your headphones", "indossa gli auricolari"),
+        tr("не могу играть", "can't play", "impossibile riprodurre"), tr("отправляю начатое, потом переключусь", "sending what you started, then switching", "invio la bozza, poi cambio canale"), tr("сначала отправь начатое", "send what you started first", "invia prima la bozza"),
+        tr("слушаю все каналы", "listening to all channels", "ascolto tutti i canali")
     )
 
     private fun prewarmCues() {
@@ -768,12 +768,55 @@ class BridgeService : Service() {
         SessionBook.all().sortedByDescending { it.lastTs }.take(4)
             .map { it.sid to it.proj.ifEmpty { it.sid.take(4) } }
 
+
+    private fun handleRadioCommand(c: JSONObject?) {
+    when (c?.optString("cmd")) {
+        "list" -> speakSessionList()
+        "switch" -> {
+            val n = c.optInt("n")
+            // v0.59: номера как раньше, но если номера нет — переключаемся по имени
+            if (n > 0) switchToSession(n) else switchByName(c.optString("name"))
+        }
+        // v0.56: снять закрепление голосом — вернуться к «последней игравшей»
+        // v0.93 (слово юзера: «сказал отбой — черновик стереть, микрофон
+        // выключить, ничего не отправлять»). Работает и посреди диктовки.
+        "sleep" -> {
+            val hadDraft = draft.isNotEmpty() || uttSpeechMs > 0
+            draft.setLength(0)
+            pendingSend = false
+            cancelAutoSend()
+            if (Cfg.whisper && recThread != null) cancelReq = true
+            LogBus.add(if (hadDraft) tr("отбой: черновик стёрт, микрофон спит", "cancel: draft erased, microphone asleep") else tr("отбой: микрофон спит", "cancel: microphone asleep"))
+            cue(if (hadDraft) tr("отбой, стёрто", "discarded, erased", "fine comunicazione, bozza cancellata") else tr("отбой", "discarded", "fine comunicazione"))
+            buzz(220)
+            noAutoWakeUntil = System.currentTimeMillis() + 600000   // 10 минут тишины
+            main.postDelayed({ if (alive) sleepAfterSend() }, 300)
+        }
+        "unpin" -> {
+            // v0.62: «открепи» снимает И режим solo. Иначе из него не выйти голосом
+            // вовсе (экранная кнопка на самокате недоступна), а режим этот глушит
+            // тринадцать сессий разом — запертым в нём остаться нельзя.
+            val wasSolo = Cfg.pickedSids.isNotEmpty()
+            Cfg.replyTarget = ""
+            Cfg.pickedSids = ""; Cfg.soloSid = ""
+            Cfg.save(this)
+            lastAnnouncedTarget = null
+            LogBus.add(
+                if (wasSolo) tr("рубка: закрепление и режим «только одна» сняты — слушаю всех", "switchboard: pin and “only one” mode cleared — listening to everyone")
+                else tr("рубка: закрепление снято — отвечаю в последнюю игравшую", "switchboard: pin cleared — replying to the last one that played")
+            )
+            say(if (wasSolo) tr("слушаю все сессии", "listening to all sessions", "ascolto tutte le sessioni") else tr("отвечаю в последнюю игравшую", "replying to the last one that played", "rispondo all'ultima sessione ascoltata"))
+        }
+        else -> LogBus.add(tr("команда рации не разобрана", "radio command not parsed"))
+    }
+    }
+
     private fun speakSessionList() {
         val l = freshSessions()
-        if (l.isEmpty()) { say(tr("сессий пока нет", "no sessions yet")); return }
+        if (l.isEmpty()) { say(tr("сессий пока нет", "no sessions yet", "nessuna sessione disponibile")); return }
         cmdList = l
         cmdListTs = System.currentTimeMillis()
-        val ord = listOf(tr("первая", "first"), tr("вторая", "second"), tr("третья", "third"), tr("четвёртая", "fourth"))
+        val ord = listOf(tr("первая", "first", "prima"), tr("вторая", "second", "seconda"), tr("третья", "third", "terza"), tr("четвёртая", "fourth", "quarta"))
         LogBus.add(tr("рубка: ", "switchboard: ") + l.mapIndexed { i, p -> "${i + 1}) ${p.second}" }.joinToString(", "))
         say(l.mapIndexed { i, p -> "${ord[i]}, ${spoken(p.second)}" }.joinToString(". "))
     }
@@ -846,7 +889,7 @@ class BridgeService : Service() {
         val hit = matchSessionByName(said)
         if (hit == null) {
             LogBus.add(tr("рубка: не узнал имя «$said» — читаю список", "switchboard: did not recognize name “$said” — reading the list"))
-            say(tr("не понял, какую сессию", "didn't catch which session"))
+            say(tr("не понял, какую сессию", "didn't catch which session", "non ho capito quale sessione"))
             main.postDelayed({ if (alive) speakSessionList() }, 2500)
             return
         }
@@ -862,7 +905,7 @@ class BridgeService : Service() {
         // и «переключись на вторую» чужой ответ переставит список, и юзер уедет не туда.
         val l = if (cmdList.isNotEmpty() && System.currentTimeMillis() - cmdListTs < 180000) cmdList
                 else freshSessions()
-        if (n < 1 || n > l.size) { LogBus.add(tr("рубка: сессии №$n нет", "switchboard: no session #$n")); say(tr("такой сессии нет", "no such session")); return }
+        if (n < 1 || n > l.size) { LogBus.add(tr("рубка: сессии №$n нет", "switchboard: no session #$n")); say(tr("такой сессии нет", "no such session", "questa sessione non esiste")); return }
         val (sid, name) = l[n - 1]
         LogBus.add(tr("рубка: адресат теперь «$name»", "switchboard: target is now “$name”"))
         setReplyTargetManual(sid)   // v0.78: та же защита начатой диктовки
@@ -871,7 +914,7 @@ class BridgeService : Service() {
 
     private fun listenCuePhrase(): String {
         val n = replyTargetName()
-        return if (n.isEmpty() || n == "—") tr("слушаю", "listening") else tr("слушаю, ", "listening, ") + spoken(n)
+        return if (n.isEmpty() || n == "—") tr("слушаю", "listening", "in ascolto") else tr("слушаю, ", "listening, ", "in ascolto, ") + spoken(n)
     }
 
     // v0.52 (боевое с самоката 30.07, дословно: «после ушло я не услышал вообще ничего… я так
@@ -886,7 +929,7 @@ class BridgeService : Service() {
         val n = if (sid.isNotEmpty())
             SessionBook.all().firstOrNull { it.sid == sid }?.proj.orEmpty()
         else replyTargetName()
-        return if (n.isEmpty() || n == "—") tr("ушло", "sent") else tr("ушло в ", "sent to ") + spoken(n)
+        return if (n.isEmpty() || n == "—") tr("ушло", "sent", "inviato") else tr("ушло в ", "sent to ", "inviato a ") + spoken(n)
     }
 
     // Поверх звучащего ответа — только фраза, которая уже лежит файлом: иначе она уйдёт в
@@ -894,7 +937,7 @@ class BridgeService : Service() {
     private fun sentPhraseOverAnswer(sid: String): String {
         val full = sentBasePhrase(sid)
         val f = cueFiles[full]
-        return if (f != null && f.exists() && f.length() > 200) full else tr("ушло", "sent")
+        return if (f != null && f.exists() && f.length() > 200) full else tr("ушло", "sent", "inviato")
     }
 
     // v0.83 (боевое: «ушло в X… слушаю… мета судья… — каша из фраз подряд»). Когда сразу
@@ -909,11 +952,11 @@ class BridgeService : Service() {
         val nname = nxt.optString("proj").ifEmpty { nsid.take(8) }
         val mid = nxt.optString("msgid")
         if (mid.isNotEmpty()) { announcedMsgId = mid; announcedProj = nname }
-        return base + tr(". дальше ", ". next, ") + spoken(nname)
+        return base + tr(". дальше ", ". next, ", ". poi, ") + spoken(nname)
     }
 
     private fun sentCuePhrase(sid: String = ""): String =
-        if (micAsleep) sentBasePhrase(sid) + tr(". микрофон спит", ". mic asleep") else sentBasePhrase(sid)
+        if (micAsleep) sentBasePhrase(sid) + tr(". микрофон спит", ". mic asleep", ". microfono in attesa") else sentBasePhrase(sid)
 
     // Обе формы «ушло» готовим заранее: какая понадобится, зависит от того, уснёт ли микрофон,
     // а на живом TTS реплика звучит тихо — ровно то, чего юзер на улице не слышит.
@@ -921,7 +964,7 @@ class BridgeService : Service() {
         ensureCue(listenCuePhrase())
         val b = sentBasePhrase()
         ensureCue(b)
-        ensureCue(tr("$b. микрофон спит", "$b. mic asleep"))
+        ensureCue(tr("$b. микрофон спит", "$b. mic asleep", "$b. microfono in attesa"))
     }
 
     private fun cue(text: String) {
@@ -1112,7 +1155,7 @@ class BridgeService : Service() {
     }
 
     private fun queueCue(f: File) {
-        val isSent = cueFiles.entries.any { it.key.startsWith(tr("ушло", "sent")) && it.value.absolutePath == f.absolutePath }
+        val isSent = cueFiles.entries.any { it.key.startsWith(tr("ушло", "sent", "inviato")) && it.value.absolutePath == f.absolutePath }
         if (!isSent && cueQueue.any { it.absolutePath == f.absolutePath }) return
         if (cueQueue.size >= 4) {
             cueQueue.poll()
@@ -1245,10 +1288,10 @@ class BridgeService : Service() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CH) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CH, "Claudio Code", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CH, "ClAudio Codice", NotificationManager.IMPORTANCE_LOW)
             )
         }
-        val n = buildNotification(if (Cfg.handsFree) tr("безрукий режим", "hands-free mode") else tr("кнопочный режим", "button mode"))
+        val n = buildNotification(if (Cfg.handsFree) tr("безрукий режим", "hands-free mode", "modalità a mani libere") else tr("кнопочный режим", "button mode", "modalità pulsante"))
         if (Build.VERSION.SDK_INT >= 29) {
             // MICROPHONE type only when the permission is actually granted —
             // otherwise Android 14+ throws SecurityException at startForeground.
@@ -1300,7 +1343,7 @@ class BridgeService : Service() {
         )
         val b = androidx.core.app.NotificationCompat.Builder(this, CH)
             .setSmallIcon(R.drawable.ic_stat_spark)   // v0.36: своя искра вместо системного ассета
-            .setContentTitle("Claudio Code")
+            .setContentTitle("ClAudio Codice")
             .setContentText(state)
             .setContentIntent(pi)
             .setOngoing(true)
@@ -1320,8 +1363,8 @@ class BridgeService : Service() {
         if (!alive) return
         val state = when {
             playing -> tr("играю ответ", "playing reply")
-            listening -> tr("слушаю", "listening")
-            else -> if (Cfg.handsFree) tr("безрукий режим", "hands-free mode") else tr("кнопочный режим", "button mode")
+            listening -> tr("слушаю", "listening", "in ascolto")
+            else -> if (Cfg.handsFree) tr("безрукий режим", "hands-free mode", "modalità a mani libere") else tr("кнопочный режим", "button mode", "modalità pulsante")
         }
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
             .notify(1, buildNotification(state))
@@ -1697,7 +1740,7 @@ class BridgeService : Service() {
         LogBus.add(tr("долгое нажатие — полный стоп", "long press — full stop"))
         if (playing) stopPlayback(false)
         if (listening) { draft.setLength(0); stopListening() }
-        cue(tr("стоп", "stop"))
+        cue(tr("стоп", "stop", "stop"))
         buzz(400)
     }
 
@@ -1802,7 +1845,7 @@ class BridgeService : Service() {
         // v1.41: части, дорезанные потолком, уже доехали — стёрт только хвост
         val partsGone = takePartDebt(listenStartedAt).isNotEmpty()
         if (!partsGone) noteEndedOwing(listenStartedAt)
-        cue(if (partsGone) tr("начало ушло, хвост отменён", "start sent, tail cancelled") else tr("отменено", "cancelled"))
+        cue(if (partsGone) tr("начало ушло, хвост отменён", "start sent, tail cancelled", "inizio inviato, parte finale annullata") else tr("отменено", "cancelled", "annullato"))
         LogBus.add(tr("черновик очищен", "draft cleared"))
         kickPlayback()   // v0.5.3: черновика нет — выпустить отложенный ответ
     }
@@ -1823,26 +1866,26 @@ class BridgeService : Service() {
         val who = lastProj?.takeIf { it.isNotEmpty() }
         val waiting = playQueue.mapNotNull { it.optString("proj").takeIf { p -> p.isNotEmpty() } }.distinct()
         return when {
-            paused -> tr("ПАУЗА", "PAUSED") + (who?.let { " · $it" } ?: "")
-            playing -> tr("ИГРАЮ", "PLAYING") + (who?.let { " · $it" } ?: tr(" ОТВЕТ", " REPLY"))
-            listening && (draft.isNotEmpty() || uttSpeechMs > 600) -> tr("СЛУШАЮ · есть черновик", "LISTENING · draft in progress")
-            listening -> tr("СЛУШАЮ", "LISTENING")
-            dictHold -> tr("ПАУЗА ДИКТОВКИ · черновик цел", "DICTATION PAUSED · draft kept")
+            paused -> tr("ПАУЗА", "PAUSED", "IN PAUSA") + (who?.let { " · $it" } ?: "")
+            playing -> tr("ИГРАЮ", "PLAYING", "RIPRODUZIONE") + (who?.let { " · $it" } ?: tr(" ОТВЕТ", " REPLY", " RISPOSTA"))
+            listening && (draft.isNotEmpty() || uttSpeechMs > 600) -> tr("СЛУШАЮ · есть черновик", "LISTENING · draft in progress", "IN ASCOLTO · bozza in corso")
+            listening -> tr("СЛУШАЮ", "LISTENING", "IN ASCOLTO")
+            dictHold -> tr("ПАУЗА ДИКТОВКИ · черновик цел", "DICTATION PAUSED · draft kept", "DETTATURA IN PAUSA · bozza conservata")
             // v0.36 (аудит): плашка врала «НА СВЯЗИ» при мёртвом релее — теперь честно
-            !wsUp -> tr("НЕТ СВЯЗИ — переподключаюсь", "OFFLINE — reconnecting")
+            !wsUp -> tr("НЕТ СВЯЗИ — переподключаюсь", "OFFLINE — reconnecting", "NON CONNESSO — riconnessione")
             // v0.51 (хвост №3): с включённым тумблером «только в наушниках» и без гарнитуры
             // ответы копятся молча, и рация выглядит сломанной. Плашка обязана назвать причину.
             (playQueue.isNotEmpty() || fileQueue.isNotEmpty()) && holdForHeadset() ->
-                tr("ЖДУ НАУШНИКИ (${playQueue.size + fileQueue.size}) · выключи «только в наушниках»", "WAITING FOR HEADPHONES (${playQueue.size + fileQueue.size}) · turn off “headphones only”")
+                tr("ЖДУ НАУШНИКИ (${playQueue.size + fileQueue.size}) · выключи «только в наушниках»", "WAITING FOR HEADPHONES (${playQueue.size + fileQueue.size}) · turn off “headphones only”", "IN ATTESA DEGLI AURICOLARI (${playQueue.size + fileQueue.size}) · disattiva “solo auricolari”")
             playQueue.isNotEmpty() || fileQueue.isNotEmpty() -> {
                 val n = playQueue.size + fileQueue.size
-                tr("ЖДЁТ ОТВЕТ ($n)", "AWAITING REPLY ($n)") + (if (waiting.isNotEmpty()) " · " + waiting.joinToString(", ") else "")
+                tr("ЖДЁТ ОТВЕТ ($n)", "AWAITING REPLY ($n)", "RISPOSTA IN ATTESA ($n)") + (if (waiting.isNotEmpty()) " · " + waiting.joinToString(", ") else "")
             }
             // v0.49: накопленное не играет само и не держит микрофон — ждёт команды «слушать»
-            heldQueue.isNotEmpty() -> tr("НАКОПИЛОСЬ (${heldQueue.size}) · жми «слушать» · микрофон свободен", "WAITING (${heldQueue.size}) · press “listen” · mic is free")
+            heldQueue.isNotEmpty() -> tr("НАКОПИЛОСЬ (${heldQueue.size}) · жми «слушать» · микрофон свободен", "WAITING (${heldQueue.size}) · press “listen” · mic is free", "IN ATTESA (${heldQueue.size}) · premi “ascolta” · microfono libero")
             // v0.50: состояние после отправки должно быть ВИДНО, а не угадываться
-            micAsleep -> tr("ОТПРАВЛЕНО · микрофон спит · жми, чтобы сказать ещё", "SENT · mic asleep · press to say more")
-            else -> tr("НА СВЯЗИ", "ONLINE")
+            micAsleep -> tr("ОТПРАВЛЕНО · микрофон спит · жми, чтобы сказать ещё", "SENT · mic asleep · press to say more", "INVIATO · microfono in attesa · premi per parlare ancora")
+            else -> tr("НА СВЯЗИ", "ONLINE", "CONNESSO")
         }
     }
 
@@ -1858,7 +1901,7 @@ class BridgeService : Service() {
         dictHold = true
         stopListening()
         buzz(90)
-        cue(tr("пауза", "paused"))
+        cue(tr("пауза", "paused", "in pausa"))
         LogBus.add(tr("диктовка на паузе — черновик цел, тап по плашке продолжит", "dictation paused — draft intact, tap the banner to resume"))
     }
 
@@ -1887,7 +1930,7 @@ class BridgeService : Service() {
         dictHold = true                     // заглушить — окружение больше не пишется
         if (listening) stopListening()
         buzz(120)
-        cue(tr("микрофон выключен", "microphone off"))
+        cue(tr("микрофон выключен", "microphone off", "microfono spento"))
         LogBus.add(tr("микрофон заглушён — слушаю только ответы; тап вернёт микрофон", "microphone muted — listening to replies only; tap to bring the microphone back"))
         updateNotification()
         return true
@@ -1901,8 +1944,8 @@ class BridgeService : Service() {
         if (Cfg.voiceOff) {
             Cfg.voiceOff = false
             Cfg.save(this)
-            LogBus.add(tr("голос включён", "voice on"))
-            if (announce) cue(tr("голос включён", "voice on"))   // one phrase per event: callers that play right after pass false
+            LogBus.add(tr("голос включён", "voice on", "voce attiva"))
+            if (announce) cue(tr("голос включён", "voice on", "voce attiva"))   // one phrase per event: callers that play right after pass false
             updateNotification()
             return false
         }
@@ -1996,7 +2039,7 @@ class BridgeService : Service() {
         if (sid == Cfg.replyTarget) {
             // повтор того же выбора: молчать нельзя — юзер повторяет команду, решив, что не дошло
             onReplyTargetPicked()
-            say(tr("отвечаю в ", "replying to ") + spoken(replyTargetName()))
+            say(tr("отвечаю в ", "replying to ", "rispondo a ") + spoken(replyTargetName()))
             if (thenListen) raiseMicFor(sid)
             return
         }
@@ -2009,7 +2052,7 @@ class BridgeService : Service() {
             pendingCloseUtt = uttId
             val to = SessionBook.all().firstOrNull { it.sid == sid }?.proj?.ifEmpty { sid.take(8) } ?: sid.take(8)
             LogBus.add(tr("сначала дошлю начатое в «${replyTargetName()}», потом переключусь на «$to»", "will first send what was started to “${replyTargetName()}”, then switch to “$to”"))
-            cue(tr("отправляю начатое, потом переключусь", "sending what you started, then switching"))
+            cue(tr("отправляю начатое, потом переключусь", "sending what you started, then switching", "invio la bozza, poi cambio canale"))
             buzz(180)
             if (Cfg.whisper) {
                 // рекордер между циклами finalizeReq не увидит (startWhisperCycle его затрёт) —
@@ -2038,7 +2081,7 @@ class BridgeService : Service() {
         ensureTargetCues()
         val n = replyTargetName()
         LogBus.add(tr("адресат: «$n»", "target: “$n”"))
-        say(tr("отвечаю в ", "replying to ") + spoken(n))
+        say(tr("отвечаю в ", "replying to ", "rispondo a ") + spoken(n))
         // имя адресата уже прозвучало — реплика подъёма микрофона повторила бы его же
         suppressListenCueUntil = System.currentTimeMillis() + 8000
     }
@@ -2143,7 +2186,7 @@ class BridgeService : Service() {
         }
         val n = picked().size
         LogBus.add(if (n == 0) tr("работаю со всеми каналами", "working with all channels") else tr("работаю с $n: ${pickedNames()}", "working with $n: ${pickedNames()}"))
-        cue(if (n == 0) tr("слушаю все каналы", "listening to all channels") else if (nowIn) tr("добавил ", "added ") + spoken(nameOf(sid)) else tr("убрал ", "removed ") + spoken(nameOf(sid)))
+        cue(if (n == 0) tr("слушаю все каналы", "listening to all channels", "ascolto tutti i canali") else if (nowIn) tr("добавил ", "added ", "aggiunto ") + spoken(nameOf(sid)) else tr("убрал ", "removed ", "rimosso ") + spoken(nameOf(sid)))
         if (n > 0) { dropForeign(playQueue); dropForeign(heldQueue) }
         updateNotification()
         return nowIn
@@ -2183,7 +2226,7 @@ class BridgeService : Service() {
             ensureTargetCues()
         }
         LogBus.add(tr("«${proj}» продолжился под новым номером — перенёс выбор со старого", "“${proj}” continued under a new number — carried the selection over from the old one"))
-        cue(tr("канал ", "channel ") + spoken(proj) + tr(" продолжается", " continues"))
+        cue(tr("канал ", "channel ", "il canale ") + spoken(proj) + tr(" продолжается", " continues", " continua"))
         updateNotification()
     }
 
@@ -2210,7 +2253,7 @@ class BridgeService : Service() {
         if (playing && lastSession != null && lastSession != sid) stopPlayback(false)
         ensureTargetCues()
         LogBus.add(tr("слушаю только «${soloName()}»", "listening only to “${soloName()}”") + (if (dropped > 0) tr(", выбросил чужих частей: $dropped", ", dropped parts from others: $dropped") else ""))
-        cue(tr("слушаю только ", "listening only to ") + soloName())
+        cue(tr("слушаю только ", "listening only to ", "ascolto solo ") + soloName())
         updateNotification()
     }
 
@@ -2223,7 +2266,7 @@ class BridgeService : Service() {
         var un = 0
         for (s in SessionBook.all()) if (s.muted) { SessionBook.setMuted(this, s.sid, false); un++ }
         LogBus.add(tr("слушаю снова все сессии", "listening to all sessions again") + (if (un > 0) tr(", снял мьют с $un", ", unmuted $un") else ""))
-        cue(tr("слушаю все сессии", "listening to all sessions"))
+        cue(tr("слушаю все сессии", "listening to all sessions", "ascolto tutte le sessioni"))
         updateNotification()
     }
 
@@ -2358,8 +2401,8 @@ class BridgeService : Service() {
         replayPrev = null
         LogBus.add(tr("звук выбранного на релее уже удалён", "the selection's audio is gone from the relay") +
             (if (t.isNotEmpty()) tr(" — читаю текст", " — reading the text") else ""))
-        val gone = tr("звук этого сообщения уже удалён", "this message's audio is gone")
-        say(if (t.isNotEmpty()) gone + tr(", читаю текст. ", ", reading the text. ") + t.take(400) else gone)
+        val gone = tr("звук этого сообщения уже удалён", "this message's audio is gone", "l'audio di questo messaggio non è più disponibile")
+        say(if (t.isNotEmpty()) gone + tr(", читаю текст. ", ", reading the text. ", ", leggo il testo. ") + t.take(400) else gone)
         return true
     }
 
@@ -2401,7 +2444,7 @@ class BridgeService : Service() {
                 return
             }
             LogBus.add(tr("нечего отправлять — микрофон не пишет", "nothing to send — microphone is not recording"))
-            cue(tr("ничего не расслышал", "didn't catch anything"))
+            cue(tr("ничего не расслышал", "didn't catch anything", "non ho capito"))
             return
         }
         // тот же случай на пути Android-распознавателя: черновика нет, потому что микрофон
@@ -2435,7 +2478,7 @@ class BridgeService : Service() {
         else if (listening) startRecognizerCycle()
         if (text.isNotEmpty()) send(text) else {
             LogBus.add(tr("пустой черновик — не отправляю", "empty draft — not sending"))
-            cue(tr("ничего не расслышал", "didn't catch anything"))   // v0.30: иначе нажатие выглядит как поломка
+            cue(tr("ничего не расслышал", "didn't catch anything", "non ho capito"))   // v0.30: иначе нажатие выглядит как поломка
             buzz(300)
         }
     }
@@ -2504,7 +2547,7 @@ class BridgeService : Service() {
             if (alive && pendingUttAck == utt) {
                 pendingUttAck = ""
                 LogBus.add(tr("сервер не подтвердил распознавание за 25с — сообщение могло застрять", "server did not confirm recognition within 25s — the message may be stuck"))
-                cue(tr("распознавание молчит", "recognition is silent"))
+                cue(tr("распознавание молчит", "recognition is silent", "il riconoscitore non restituisce parole"))
                 buzz(400)
             }
         }
@@ -2535,7 +2578,7 @@ class BridgeService : Service() {
                     reconnectDelay = 3000L
                     LogBus.add(tr("связь с релеем установлена", "relay connection established"))
                     // v0.26: голосом — только на СМЕНУ состояния, иначе реконнекты засыплют репликами
-                    if (wasDown && announcedLink != true) { announcedLink = true; cue(tr("рация на связи", "radio online")); buzz(60) }
+                    if (wasDown && announcedLink != true) { announcedLink = true; cue(tr("рация на связи", "radio online", "ClAudio Codice connesso")); buzz(60) }
                     // v0.36: досылаем то, что не ушло из-за сети (send() больше не теряет текст)
                     while (unsent.isNotEmpty()) {
                         val t = unsent.pollFirst() ?: break
@@ -2557,7 +2600,7 @@ class BridgeService : Service() {
                     if (!alive || webSocket !== ws) return@post
                     wsUp = false
                     LogBus.add(tr("связь потеряна: ${t.message} — переподключусь", "connection lost: ${t.message} — will reconnect"))
-                    if (announcedLink != false) { announcedLink = false; cue(tr("связь потеряна", "connection lost")); buzz(500) }
+                    if (announcedLink != false) { announcedLink = false; cue(tr("связь потеряна", "connection lost", "connessione persa")); buzz(500) }
                     scheduleReconnect()
                 }
             }
@@ -2611,7 +2654,7 @@ class BridgeService : Service() {
                     LogBus.add(tr("накопилось $added част. — микрофон свободен, говори; «слушать» проиграет их", "$added parts piled up — microphone is free, speak; “listen” will play them"))
                     // v0.68: раньше о догнанных ответах говорил только вибро-толчок — на ходу
                     // это «рация буркнула и молчит». Теперь называем вслух, что делать.
-                    say(tr("есть ответы — нажми слушать", "replies waiting — press listen"))
+                    say(tr("есть ответы — нажми слушать", "replies waiting — press listen", "risposte in attesa, premi ascolta"))
                     buzz(140)               // толчок: есть что послушать
                     // v0.94: cue("есть ответы") УДАЛЁН — он обрывал фразу выше на полуслове,
                     // а говорил ровно то же, только без подсказки, что делать (аудит)
@@ -2678,10 +2721,10 @@ class BridgeService : Service() {
                         Cfg.replyTarget = ""
                         Cfg.save(this)
                         LogBus.add(tr("мёртвый адресат откреплён — отвечаю теперь в последнюю игравшую", "dead target unpinned — replying now to the last one that played"))
-                        cue(tr("адресат сброшен, повтори", "recipient reset, say it again"))
+                        cue(tr("адресат сброшен, повтори", "recipient reset, say it again", "destinatario reimpostato, ripeti il messaggio"))
                     } else if (System.currentTimeMillis() - lastUnreadCueTs > 10000) {
                         lastUnreadCueTs = System.currentTimeMillis()
-                        cue(tr("канал не слушает", "channel is not listening"))
+                        cue(tr("канал не слушает", "channel is not listening", "il canale non riceve"))
                         // v0.82: не добавлять «слушаю, X» поверх предупреждения (каша из фраз).
                         // Окно, а не флаг: подъём микрофона может случиться сильно позже, и тогда
                         // молчание было бы уже вредным («микрофон встал, а я не знаю»).
@@ -2808,7 +2851,7 @@ class BridgeService : Service() {
                     if (dict in endedOwingDicts && !partsInFlight(dict)) {
                         // монолог закрыт, и ни одна его часть так и не доехала — честно сказать
                         endedOwingDicts.remove(dict)
-                        if (!listening) cue(tr("ничего не расслышал", "didn't catch anything"))
+                        if (!listening) cue(tr("ничего не расслышал", "didn't catch anything", "non ho capito"))
                     }
                     if (!listening) kickPlayback()
                     return
@@ -2838,7 +2881,7 @@ class BridgeService : Service() {
                 }
                 if (System.currentTimeMillis() - lastEmptyCueTs > 60000 && (!playing || paused) && !justSent) {
                     lastEmptyCueTs = System.currentTimeMillis()
-                    cue(tr("ничего не расслышал", "didn't catch anything"))   // v0.88/0.90: не поверх ответа и не сразу после «ушло»
+                    cue(tr("ничего не расслышал", "didn't catch anything", "non ho capito"))   // v0.88/0.90: не поверх ответа и не сразу после «ушло»
                 } else if (justSent) LogBus.add(tr("пустой хвост после отправки — молчу", "empty tail after sending — staying quiet"))
                 buzz(300)
             }
@@ -2859,7 +2902,7 @@ class BridgeService : Service() {
                 if (cancelPart && listening && dict == listenStartedAt) {
                     LogBus.add(tr("отменён кусок монолога (потолок), диктовка продолжается", "monologue chunk (cap) cancelled, dictation continues"))
                     capPartAt = System.currentTimeMillis()
-                    cue(tr("кусок отменён, слушаю", "chunk cancelled, listening"))
+                    cue(tr("кусок отменён, слушаю", "chunk cancelled, listening", "parte annullata, in ascolto"))
                     buzz(220)
                     return
                 }
@@ -2870,7 +2913,7 @@ class BridgeService : Service() {
                 if (partsGone) LogBus.add(tr("отменён только хвост — начало монолога уже доехало", "only the tail cancelled — the start of the monologue already arrived"))
                 // v1.41 (ревью): запоздалая отмена прошлого монолога посреди новой диктовки — вибро
                 if (listening && dict != listenStartedAt) LogBus.add(tr("прошлое сообщение отменено — вибро, идёт новая диктовка", "previous message cancelled — vibration, new dictation in progress"))
-                else cue(if (partsGone) tr("начало ушло, хвост отменён", "start sent, tail cancelled") else tr("отменено", "cancelled"))
+                else cue(if (partsGone) tr("начало ушло, хвост отменён", "start sent, tail cancelled", "inizio inviato, parte finale annullata") else tr("отменено", "cancelled", "annullato"))
                 buzz(220)
                 if (o.optString("utt") == uttId) rotateReq = true
                 kickPlayback()
@@ -2890,45 +2933,7 @@ class BridgeService : Service() {
                 // сработало ложно, текст не придётся вспоминать по памяти
                 if (src.isNotEmpty()) LogBus.add(tr("команда рации из: «$src»", "radio command from: “$src”"))
                 buzz(140)   // толчок: команда принята, даже если реплики выключены
-                when (c?.optString("cmd")) {
-                    "list" -> speakSessionList()
-                    "switch" -> {
-                        val n = c.optInt("n")
-                        // v0.59: номера как раньше, но если номера нет — переключаемся по имени
-                        if (n > 0) switchToSession(n) else switchByName(c.optString("name"))
-                    }
-                    // v0.56: снять закрепление голосом — вернуться к «последней игравшей»
-                    // v0.93 (слово юзера: «сказал отбой — черновик стереть, микрофон
-                    // выключить, ничего не отправлять»). Работает и посреди диктовки.
-                    "sleep" -> {
-                        val hadDraft = draft.isNotEmpty() || uttSpeechMs > 0
-                        draft.setLength(0)
-                        pendingSend = false
-                        cancelAutoSend()
-                        if (Cfg.whisper && recThread != null) cancelReq = true
-                        LogBus.add(if (hadDraft) tr("отбой: черновик стёрт, микрофон спит", "cancel: draft erased, microphone asleep") else tr("отбой: микрофон спит", "cancel: microphone asleep"))
-                        cue(if (hadDraft) tr("отбой, стёрто", "discarded, erased") else tr("отбой", "discarded"))
-                        buzz(220)
-                        noAutoWakeUntil = System.currentTimeMillis() + 600000   // 10 минут тишины
-                        main.postDelayed({ if (alive) sleepAfterSend() }, 300)
-                    }
-                    "unpin" -> {
-                        // v0.62: «открепи» снимает И режим solo. Иначе из него не выйти голосом
-                        // вовсе (экранная кнопка на самокате недоступна), а режим этот глушит
-                        // тринадцать сессий разом — запертым в нём остаться нельзя.
-                        val wasSolo = Cfg.pickedSids.isNotEmpty()
-                        Cfg.replyTarget = ""
-                        Cfg.pickedSids = ""; Cfg.soloSid = ""
-                        Cfg.save(this)
-                        lastAnnouncedTarget = null
-                        LogBus.add(
-                            if (wasSolo) tr("рубка: закрепление и режим «только одна» сняты — слушаю всех", "switchboard: pin and “only one” mode cleared — listening to everyone")
-                            else tr("рубка: закрепление снято — отвечаю в последнюю игравшую", "switchboard: pin cleared — replying to the last one that played")
-                        )
-                        say(if (wasSolo) tr("слушаю все сессии", "listening to all sessions") else tr("отвечаю в последнюю игравшую", "replying to the last one that played"))
-                    }
-                    else -> LogBus.add(tr("команда рации не разобрана", "radio command not parsed"))
-                }
+                handleRadioCommand(c)
                 kickPlayback()
             }
             // v0.60: сервер набрал 12с звука без распознанных слов и собирается отправить
@@ -3299,7 +3304,7 @@ class BridgeService : Service() {
                 LogBus.add(tr("граница каналов: ${BOUNDARY_ANSWER_MS / 1000}с на ответ «$prev» — дальше «$who» (заговоришь — подожду)", "channel boundary: ${BOUNDARY_ANSWER_MS / 1000}s to answer “$prev” — then “$who” (speak and I will wait)"))
                 // v0.81 (боевое: «говорит „ответил войсбридж“, хотя никто не отвечал»):
                 // «ответил X» читалось как «X прислал ответ». Фраза теперь — приглашение.
-                say(tr("ответь ", "reply to ") + spoken(prev) + tr(", дальше ", ", next, ") + spoken(who))
+                say(tr("ответь ", "reply to ", "rispondi a ") + spoken(prev) + tr(", дальше ", ", next, ", ", poi, ") + spoken(who))
                 // v0.88 (боевое: «ответь мета судья… слушаю мета судья» — две фразы об одном
                 // и том же подряд): объявление зазора УЖЕ назвало адресата, реплика подъёма
                 // микрофона тут лишняя. Окно с запасом на устаканивание SCO.
@@ -3957,7 +3962,7 @@ class BridgeService : Service() {
             if (scoWaitCount >= SCO_WAIT_MAX) {
                 if (scoWaitCount == SCO_WAIT_MAX) {
                     LogBus.add(tr("гарнитура не отдала микрофон ~8с — пишу с микрофона телефона (верну ей, как отдаст)", "headset did not give up the mic for ~8s — recording from the phone mic (will hand back when it releases)"))
-                    cue(tr("гарнитура не отвечает", "headset not responding"))
+                    cue(tr("гарнитура не отвечает", "headset not responding", "gli auricolari non rispondono"))
                     buzz(300)
                 }
                 return true
@@ -4295,7 +4300,7 @@ class BridgeService : Service() {
             main.post {
                 if (!alive) return@post
                 LogBus.add(tr("сегмент не отправлен: не знаю сессию-адресата (нажми «говорить» — уточню у релея)", "segment not sent: target session unknown (press “talk” — will ask the relay)"))
-                if (fin) { cue(tr("не знаю, кому отправить", "no one to send to")); buzz(400) }   // v0.36 (ревью): финал не должен быть немым
+                if (fin) { cue(tr("не знаю, кому отправить", "no one to send to", "nessun destinatario")); buzz(400) }   // v0.36 (ревью): финал не должен быть немым
             }
             return
         }
@@ -4639,7 +4644,7 @@ class BridgeService : Service() {
                     paused -> tr("рация на паузе", "radio is paused")
                     else -> tr("очередь стоит", "queue is stalled")
                 })
-                cue(if (noHs) tr("надень наушники", "put on your headphones") else tr("не могу играть", "can't play"))
+                cue(if (noHs) tr("надень наушники", "put on your headphones", "indossa gli auricolari") else tr("не могу играть", "can't play", "impossibile riprodurre"))
                 buzz(300)
             }
         }, 2500)
@@ -5130,7 +5135,7 @@ class BridgeService : Service() {
                 } else {
                     // накопленное за 5 минут без диалога — фоновый мусор, не сообщение
                     if (Cfg.whisper && recThread != null) cancelReq = true
-                    cue(tr("микрофон выключен", "microphone off"))
+                    cue(tr("микрофон выключен", "microphone off", "microfono spento"))
                     buzz(400)
                     stopListening()
                     LogBus.add(tr("диктофон уснул (5 мин без общения) — разбудит ответ или кнопка", "recorder fell asleep (5 min without activity) — a reply or button will wake it"))
@@ -5158,30 +5163,26 @@ class BridgeService : Service() {
     // v0.46-fix: догадка (lastPartial) уходит в сессию мимо onFinalText — прогоняем её через ту
     // же нормализацию и стоп-слово. Возврат null = это была «отмена», слать нечего.
     private fun cleanPartialForSend(t: String): String? {
-        val norm = t.lowercase().replace(Regex("[^а-яёa-z0-9 ]"), " ").trim()
-        if (CANCEL_WORDS.contains(norm)) return null
-        if (!Cfg.handsFree) return t.trim()
-        val words = norm.split(Regex("\\s+")).filter { it.isNotEmpty() }
-        val sendRe = Regex("^([оа]т?|т)п+рав\\w*$")
-        val tailFillers = setOf("пожалуйста", "сейчас", "давай", "сообщение", "это", "уже", "быстро")
-        var idxSend = -1
-        if (Lang.en) {
-            if (EN_SEND_PHRASES.contains(words.joinToString(" "))) return ""   // весь сегмент — команда
-        } else if (words.isNotEmpty()) {
-            val li = words.size - 1
-            if (sendRe.matches(words[li])) idxSend = li
-            else if (words.size >= 2 && tailFillers.contains(words[li]) && sendRe.matches(words[li - 1])) idxSend = li - 1
-        }
-        if (idxSend < 0) return t.trim()
-        val matched = words[idxSend]
-        val idx = t.lowercase().lastIndexOf(matched)
-        return (if (idx >= 0) t.substring(0, idx) else t).trim().trimEnd(',', '.', '!', ' ')
+        val norm = ItalianCommands.normalize(t)
+        if (norm in CANCEL_WORDS) return null
+        if (Cfg.handsFree && norm in SEND_PHRASES) return ""
+        return t.trim()
     }
 
     private fun onFinalText(t: String) {
-        lastRealSpeechTs = System.currentTimeMillis()   // v0.98: слова на пути распознавателя
-        val norm = t.lowercase().replace(Regex("[^а-яёa-z0-9 ]"), " ").trim()
-        val tail = norm.split(Regex("\\s+")).lastOrNull() ?: ""
+        lastRealSpeechTs = System.currentTimeMillis()
+        val norm = ItalianCommands.normalize(t)
+        val command = ItalianCommands.parse(t)
+        // A navigation command is a separate utterance before dictation. Never
+        // reinterpret accumulated prose as navigation or silently lose a draft.
+        if (command != null && (draft.isEmpty() || command.cmd == "sleep")) {
+            lastPartial = ""
+            cancelAutoSend()
+            resetSendWindow()
+            handleRadioCommand(JSONObject().put("cmd", command.cmd).put("n", command.n).put("name", command.name))
+            kickPlayback()
+            return
+        }
 
         if (CANCEL_WORDS.contains(norm)) {
             cancelAutoSend()
@@ -5192,46 +5193,15 @@ class BridgeService : Service() {
             return
         }
 
-        // Voice send is a hands-free gesture; in button mode the button ships it.
-        // v0.4 (боевой фидбек 18.07: «отправляй» срабатывал раз через 10): узкополосный SCO-микрофон
-        // гарнитуры коверкает слово («отправляет/отправить/оправляй»), а точный матч последнего слова
-        // всё это ронял. Теперь: НЕЧЁТКИЙ матч по корню [оа]?т?прав* — последним словом ИЛИ предпоследним,
-        // когда последнее — «хвостик» вроде «пожалуйста» (естественная речь). Ложный плюс дешевле немоты:
-        // отправка подтверждается бипом, случайную можно продолжить следующим сообщением.
-        if (Cfg.handsFree) {
-            val words = norm.split(Regex("\\s+")).filter { it.isNotEmpty() }
-            // v0.12 (боевое «я говорю-говорю, а оно уже пишет ушло»): корень был НЕ в таймере тишины.
-            // Старый широкий шаблон ^[оа]?т?п+рав\w*$ матчил «правда», «правильно», «право», «правил» —
-            // частейшие слова живой речи. Любое из них последним словом = мгновенная отправка посреди
-            // мысли. Теперь приставка ОБЯЗАТЕЛЬНА (от/о/ат/а/т + прав...): искажения SCO по-прежнему
-            // ловятся, а «правда/правильно» — уже нет.
-            val sendRe = Regex("^([оа]т?|т)п+рав\\w*$")
-            val tailFillers = setOf("пожалуйста", "сейчас", "давай", "сообщение", "это", "уже", "быстро")
-            var idxSend = -1
-            if (Lang.en) {
-                if (EN_SEND_PHRASES.contains(words.joinToString(" "))) idxSend = 0
-            } else if (words.isNotEmpty()) {
-                val li = words.size - 1
-                if (sendRe.matches(words[li])) idxSend = li
-                else if (words.size >= 2 && tailFillers.contains(words[li]) && sendRe.matches(words[li - 1])) idxSend = li - 1
-            }
-            if (idxSend >= 0) {
-                cancelAutoSend()
-                resetSendWindow()   // v0.46
-                val matched = words[idxSend]
-                val cut = if (Lang.en) "" else t.trim().let {
-                    val idx = it.lowercase().lastIndexOf(matched)
-                    if (idx >= 0) it.substring(0, idx) else it
-                }.trim().trimEnd(',', '.', '!', ' ')
-                if (cut.isNotEmpty() && draft.isEmpty()) draftStartTs = listenStartedAt   // v1.43
-                if (cut.isNotEmpty()) draft.append(if (draft.isEmpty()) "" else " ").append(cut)
-                val msg = draft.toString().trim()
-                draft.setLength(0); lastPartial = ""   // v0.46-fix: мысль ушла — догадку не дошлём дублем
-                // v0.12: в журнале видно ПРИЧИНУ отправки — «ушло» больше не выглядит самопроизвольным
-                if (msg.isNotEmpty()) { LogBus.add(tr("стоп-слово «$matched» — отправляю", "stop word “$matched” — sending")); send(msg); sleepAfterSend() }
-                else LogBus.add(tr("нечего отправлять", "nothing to send"))
-                return
-            }
+        if (Cfg.handsFree && norm in SEND_PHRASES) {
+            cancelAutoSend()
+            resetSendWindow()
+            val msg = draft.toString().trim()
+            draft.setLength(0)
+            lastPartial = ""
+            if (msg.isNotEmpty()) { send(msg); sleepAfterSend() }
+            else LogBus.add("Niente da inviare")
+            return
         }
 
         val finTs = System.currentTimeMillis()
@@ -5287,7 +5257,7 @@ class BridgeService : Service() {
                     if (unsent.size < 10) unsent.addLast(text)
                     beepBoth(ToneGenerator.TONE_PROP_NACK, 300)
                     buzz(500)
-                    cue(tr("не ушло, отправлю при связи", "not sent, will send when back online"))
+                    cue(tr("не ушло, отправлю при связи", "not sent, will send when back online", "invio sospeso, riproverò alla riconnessione"))
                     LogBus.add(tr("отправка НЕ удалась: ${e.message} — сохранил, дошлю при связи: ${text.take(60)}", "send FAILED: ${e.message} — saved, will resend when connected: ${text.take(60)}"))
                     kickPlayback()   // v0.5.3: не держать очередь озвучек из-за сбоя отправки
                 }
@@ -5317,7 +5287,7 @@ class BridgeService : Service() {
                             LogBus.add(tr("ВНИМАНИЕ: «${projLabel ?: sid.take(8)}» не забирает сообщения — сессия закрыта или приёмник умер. Текст ждёт в очереди", "WARNING: “${projLabel ?: sid.take(8)}” is not picking up messages — session closed or receiver died. Text waits in the queue"))
                             if (System.currentTimeMillis() - lastUnreadCueTs > 10000) {
                                 lastUnreadCueTs = System.currentTimeMillis()
-                                cue(tr("канал не слушает", "channel is not listening"))
+                                cue(tr("канал не слушает", "channel is not listening", "il canale non riceve"))
                                 suppressListenCueUntil = System.currentTimeMillis() + 8000   // v0.82
                             }
                             buzz(400)
