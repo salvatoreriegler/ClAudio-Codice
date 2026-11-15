@@ -1,66 +1,62 @@
-# Claudio Code
+# ClAudio Codice
 
-A hands-free walkie-talkie for [Claude Code](https://claude.com/claude-code): your Claude Code
-sessions speak their replies into your earphones, and you answer by voice from an Android
-phone — while walking, riding or cooking. Several sessions become channels you can switch
-between.
+Parla in italiano con le tue sessioni di Claude Code dal telefono Android.
+Ascolta le risposte, detta messaggi e passa da una conversazione all'altra.
 
+Fork italiano di [Claudio Code di 1nspectorCat / VladiKo](https://github.com/1nspectorCat/Claudio-Code), distribuito con la stessa [licenza MIT](LICENSE).
+
+## Edizione italiana
+
+- Nome dell'app: **ClAudio Codice**.
+- Schermata principale, canali, configurazione e avvisi vocali in italiano.
+- Riconoscimento Android `it-IT`; Whisper impostato su `it`.
+- Voce desktop italiana `it-IT-DiegoNeural`, modificabile nella configurazione.
+- Cambio sessione a voce sia con Android sia con Whisper.
+- Identificativo Android `it.claudiocodice.app` e link `claudio-codice://setup` dedicati: può essere installata accanto all'originale.
+
+Questa prima edizione traduce il percorso principale. I registri tecnici e le schermate sperimentali dell'hub conservano parte dei testi inglesi; commenti e documentazione interna ereditati possono essere in russo. Il server dell'hub multi-provider non è incluso nell'upstream: questa versione collega le sessioni di **Claude Code**.
+
+## Comandi vocali
+
+Pronuncia il comando come frase autonoma. Con il riconoscitore Android, attiva **modalità a mani libere** per inviare a voce.
+
+| Comando | Effetto |
+| --- | --- |
+| «Elenca le sessioni» | Legge le quattro sessioni più recenti con il loro numero. |
+| «Passa alla seconda» | Seleziona la seconda sessione dell'elenco. |
+| «Passa alla seconda sessione» | Stessa selezione. |
+| «Passa alla sessione contabilità» | Cerca il canale per nome. Ascolta la conferma del destinatario. |
+| «Torna in automatico» | Rimuove scelta esplicita e filtro dei canali. |
+| «Invia» / «Invia per favore» | Invia la bozza dettata. |
+| «Annulla» | Cancella la bozza. |
+| «Fine comunicazione» | Cancella la bozza e mette il microfono in attesa. |
+
+Le parole dentro una frase normale, come «il programma invia i dati», restano testo.
+Per cambiare canale a voce, invia o annulla prima la bozza. La numerazione segue l'ultimo elenco letto per tre minuti e non è un identificativo permanente.
+
+## Collegamenti
+
+```text
+Claude Code sul computer ←→ relay sul tuo server ←→ ClAudio Codice su Android
+                            code per sessione
 ```
-Claude Code (your computer)                 your server (any VPS)        phone
-Stop hook voices the reply   ── HTTPS ──▶  relay.js (Node, port 8443) ◀── Claudio Code app
-and posts the audio to the relay           session queues, /utt, WSS      plays replies, sends voice
+
+Servono Android 8+, Claude Code sul computer e un server Linux con Node.js 18+. Whisper è facoltativo. La voce italiana non traduce le risposte: chiedi a Claude Code di rispondere in italiano.
+
+- [Installazione e compilazione](docs/SETUP.md)
+- [Guida all'uso](docs/GUIDE.md)
+- [Flusso dei dati](docs/PRIVACY.md)
+- [Origine e stato del fork](docs/FORK.md)
+
+## Verifiche
+
+```bash
+node --test server/test/*.test.js
+./gradlew :app:testStoreDebugUnitTest :app:assembleStoreDebug
 ```
 
-Port 8443 is only an example: the relay listens on whatever port you put in its `config.json`.
+Su Windows usa `gradlew.bat`. Servono JDK 17 e Android SDK 35.
+L'APK `storeDebug` è una build di sviluppo, firmata con la chiave di debug locale.
 
-There is no shared server: everyone runs their own small relay. Your audio and text go only
-through machines you control.
-
-## What it does
-
-- Plays each session's reply in your earphones as soon as it is ready.
-- You answer by voice; the message lands in the session that spoke last (or the one you picked).
-- Say **"send"** to send, **"cancel"** to drop the draft — or use the big button on the screen
-  or your headset button. A voice command works only as a phrase of its own ("send", "send it",
-  "send please", "send now"; "cancel"), so "I'll send it tomorrow" never sends by accident.
-- Several sessions = several channels: choose which ones you hear, and which one you answer.
-- System phrases are short and never talk over a reply; the reply pauses and resumes.
-
-## Setup (about 15 minutes)
-
-1. **Server** — any Linux box with a public IP and Node.js 18+. Copy `server/relay.js` and
-   `server/install-relay.sh`, run `bash install-relay.sh`. It creates a token and a
-   certificate, starts the relay and prints a setup link (`claudio://setup?...`) with a QR code.
-2. **Computer with Claude Code** — copy `desktop/readback.py` to `~/.claude/voice/`, fill in
-   its `config.json` (relay address, token) and register it as a Stop hook in
-   `~/.claude/settings.json`. Every reply is voiced (edge-tts + ffmpeg) and sent to the relay.
-   In a session, start the inbox poller (the `voice-bridge` skill from this repo).
-3. **Phone** — install the app (APK from [Releases](https://github.com/1nspectorCat/Claudio-Code/releases/latest)), scan the QR code from your server. Address, token and
-   certificate fingerprint are set automatically. Tap the circle and say "hello".
-
-Details: [SETUP.md](docs/SETUP.md). How to use the app: [GUIDE.md](docs/GUIDE.md).
-Privacy: [PRIVACY.md](docs/PRIVACY.md).
-
-## Speech recognition
-
-By default the app uses Android's own speech recognizer (English, en-US). Optionally you can
-run whisper.cpp on your server for better recognition in noise (`transcribe.js`, "advanced" →
-Whisper in the app). Whisper detects the language automatically; to pin it, set
-`WHISPER_LANG` (see [SETUP.md](docs/SETUP.md#whisper-optional-advanced)).
-
-## In development
-
-A multi-provider hub: one server that runs coding sessions on any subscription you already have
-(Claude, Gemini, OpenAI and others), with channels created from the phone and a lead model handing
-routine work to cheaper ones. It works in the author's own setup today; the app screens for it are
-hidden in this build until the hub server is cleaned up and published.
-
-## Requirements
-
-- Android phone, Bluetooth earphones or a headset (the app will not play replies through the
-  phone speaker unless you allow it).
-- Claude Code on a computer, a small server you control.
-
-## License
-
-MIT, see [LICENSE](LICENSE).
+Copyright originale: **2026 VladiKo**. `LICENSE` è preservato integralmente.
+ClAudio Codice è un fork indipendente, non un prodotto ufficiale di Anthropic.

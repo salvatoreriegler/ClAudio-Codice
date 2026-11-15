@@ -36,7 +36,9 @@ const WHISPER = path.join(process.env.HOME, 'whisper.cpp', 'build', 'bin', 'whis
 const MODEL = path.join(process.env.HOME, 'whisper.cpp', 'models', 'ggml-base.bin');
 const PORT = CFG.port || 8443;
 // Язык распознавания для whisper-cli -l: "auto" (по умолчанию), "en", "ru"… Владельцу — WHISPER_LANG=ru.
-const WHISPER_LANG = process.env.WHISPER_LANG || 'auto';
+const WHISPER_LANG = process.env.WHISPER_LANG || 'it';
+const italian = require('./italian-commands');
+const IT_CMDS = (process.env.COMMAND_LANG || 'it') === 'it';
 // English commands only off a pure-Russian setup: there the old Russian rules stay exactly as they were.
 const EN_CMDS = WHISPER_LANG !== 'ru';
 
@@ -92,6 +94,7 @@ function lastSentence(text) {
 }
 
 function stripSendWord(text) {
+  if (IT_CMDS) return italian.stripSend(text);
   if (EN_CMDS) {
     const ls = lastSentence(text);
     if (EN_SEND.has(ls.phrase)) return { text: text.slice(0, ls.at).trim(), hit: true, word: ls.raw };
@@ -175,6 +178,7 @@ const isSessionWord = (x) =>
   x.startsWith('сесси') || lev(x, 'сессию') <= 2 || lev(x, 'сессия') <= 2 || lev(x, 'сессии') <= 2;
 
 function parseCmd(text) {
+  if (IT_CMDS) return italian.parseRadioCommand(text);
   // v0.60 (боевое, ГЛАВНАЯ причина «переключение вообще не работает»): юзер, не услышав
   // отклика, повторяет команду два-три раза — и фраза перестаёт быть короткой, а значит
   // и командой. Смотрим ТОЛЬКО ПЕРВОЕ предложение: повторы и продолжение мысли ему не мешают.
@@ -246,6 +250,7 @@ function parseCmd(text) {
 }
 
 function tailCancel(text) {
+  if (IT_CMDS) return italian.isCancel(text);
   if (EN_CMDS && EN_CANCEL.has(lastSentence(text).phrase)) return true;
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (!words.length) return false;
@@ -463,7 +468,7 @@ async function tick() {
         if (size > 100) {
           const t0 = Date.now();
           text = stripNoise(transcribe(full));
-          if (text) { st.text = (st.text + ' ' + text).trim(); st.emptyMs = 0; st.warned = false; }
+          if (text) { st.text = IT_CMDS ? italian.appendTranscript(st.text, text) : (st.text + ' ' + text).trim(); st.emptyMs = 0; st.warned = false; }
           else st.emptyMs += (size / 32000) * 1000;   // сек звука без слов -> мс
           log(`utt ${utt} seg ${seq}: ${(size / 32000).toFixed(1)}s audio -> ${Date.now() - t0}ms, "${text.slice(0, 60)}"`);
         }

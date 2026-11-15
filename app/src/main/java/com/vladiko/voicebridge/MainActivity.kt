@@ -281,8 +281,8 @@ class MainActivity : AppCompatActivity() {
         val yesterday = dayKey(System.currentTimeMillis() - 86400000L)
         val k = dayKey(ts)
         return when (k) {
-            today -> tr("сегодня", "today")
-            yesterday -> tr("вчера", "yesterday")
+            today -> tr("сегодня", "today", "oggi")
+            yesterday -> tr("вчера", "yesterday", "ieri")
             else -> java.text.SimpleDateFormat("d MMMM", Lang.locale).format(java.util.Date(ts))
         }
     }
@@ -294,10 +294,10 @@ class MainActivity : AppCompatActivity() {
         if (ts <= 0) return "?"
         val s = (System.currentTimeMillis() - ts) / 1000
         return when {
-            s < 60 -> tr("только что", "just now")
-            s < 3600 -> tr("${s / 60} мин назад", "${s / 60} min ago")
-            s < 86400 -> tr("${s / 3600} ч назад", "${s / 3600} h ago")
-            else -> tr("${s / 86400} дн назад", "${s / 86400} d ago")
+            s < 60 -> tr("только что", "just now", "adesso")
+            s < 3600 -> tr("${s / 60} мин назад", "${s / 60} min ago", "${s / 60} min fa")
+            s < 86400 -> tr("${s / 3600} ч назад", "${s / 3600} h ago", "${s / 3600} ore fa")
+            else -> tr("${s / 86400} дн назад", "${s / 86400} d ago", "${s / 86400} giorni fa")
         }
     }
 
@@ -392,14 +392,14 @@ class MainActivity : AppCompatActivity() {
         outState.putLong("hubReqWaitMs", hubReqWaitMs)
     }
 
-    // ── ссылка-настройка: claudio://setup?url=…&token=…&pin=… ────────────
+    // ── ссылка-настройка: claudio-codice://setup?url=…&token=…&pin=… ────────────
     // Скрипт установки релея печатает её (и QR) — конфиг встаёт сам, без клавиатуры.
     private fun handleDeepLink(i: Intent?) {
         val u = i?.data ?: return
         // тот же Intent доставляется повторно при пересоздании Activity (поворот) —
         // гасим data, чтобы настройка не переигрывалась и не дёргала рестарт сервиса
         i.data = null
-        if (!"claudio".equals(u.scheme, true) || !"setup".equals(u.host, true)) return
+        if (!"claudio-codice".equals(u.scheme, true) || !"setup".equals(u.host, true)) return
         val url = u.getQueryParameter("url").orEmpty().trim().trimEnd('/')
         val token = u.getQueryParameter("token").orEmpty().trim()
         val pin = u.getQueryParameter("pin").orEmpty().trim()
@@ -426,11 +426,11 @@ class MainActivity : AppCompatActivity() {
         LogBus.add(tr("ссылка-настройка: прошу подтвердить сервер «${host}»", "setup link: asking to confirm server “${host}”"))
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setMessage(
-                if (fresh) tr("подключить рацию к серверу «${host}»?\nвся диктовка пойдёт туда.\nэто твой сервер?", "connect the radio to server “${host}”?\nall dictation will go there.\nis this your server?")
-                else tr("заменить настройки релея на «${host}»?\nвся диктовка пойдёт на этот сервер.", "replace relay settings with “${host}”?\nall dictation will go to this server.")
+                if (fresh) tr("подключить рацию к серверу «${host}»?\nвся диктовка пойдёт туда.\nэто твой сервер?", "connect the radio to server “${host}”?\nall dictation will go there.\nis this your server?", "Collegare ClAudio Codice al server “${host}”?\nTutta la dettatura passerà da questo server.\nÈ il tuo server?")
+                else tr("заменить настройки релея на «${host}»?\nвся диктовка пойдёт на этот сервер.", "replace relay settings with “${host}”?\nall dictation will go to this server.", "Sostituire le impostazioni con quelle di “${host}”?\nTutta la dettatura passerà da questo server.")
             )
-            .setPositiveButton(if (fresh) tr("подключить", "connect") else tr("заменить", "replace")) { _, _ -> applyDeepLink(url, token, pin) }
-            .setNegativeButton(tr("отмена", "cancel")) { _, _ -> LogBus.add(tr("настройка по ссылке отклонена", "setup by link rejected")) }
+            .setPositiveButton(if (fresh) tr("подключить", "connect", "collega") else tr("заменить", "replace", "sostituisci")) { _, _ -> applyDeepLink(url, token, pin) }
+            .setNegativeButton(tr("отмена", "cancel", "annulla")) { _, _ -> LogBus.add(tr("настройка по ссылке отклонена", "setup by link rejected")) }
             .show()
     }
 
@@ -465,7 +465,7 @@ class MainActivity : AppCompatActivity() {
                 setColor(0); setStroke(dp(1), cPlay); cornerRadius = dp(16).toFloat()
             }
             setPadding(dp(12), dp(6), dp(12), dp(6))
-            contentDescription = tr("текущий канал — тап открывает список", "current channel — tap to open the list")
+            contentDescription = tr("текущий канал — тап открывает список", "current channel — tap to open the list", "canale attuale — tocca per aprire l'elenco")
             setOnClickListener { openSheet() }
             // наследник старой кнопки «слушать крайнее»: свежайшее сообщение ЛЮБОЙ сессии
             setOnLongClickListener {
@@ -476,22 +476,22 @@ class MainActivity : AppCompatActivity() {
         }
         muteBtn = tv("🔇", 16f, cDim).apply {
             setPadding(dp(10), dp(6), dp(10), dp(6))
-            contentDescription = tr("заглушить или включить микрофон", "mute or unmute the microphone")
+            contentDescription = tr("заглушить или включить микрофон", "mute or unmute the microphone", "disattiva o attiva il microfono")
             setOnClickListener {
                 val svc = BridgeService.instance
-                if (svc == null || !BridgeService.running) { LogBus.add(tr("рация выключена", "radio is off")); return@setOnClickListener }
+                if (svc == null || !BridgeService.running) { LogBus.add(tr("рация выключена", "radio is off", "ClAudio Codice è spento")); return@setOnClickListener }
                 svc.toggleMicMute()
             }
         }
         val gear = tv("⚙", 18f, cDim).apply {
             setPadding(dp(10), dp(4), dp(4), dp(4))
-            contentDescription = tr("настройки", "settings")
+            contentDescription = tr("настройки", "settings", "impostazioni")
             setOnClickListener { settingsOverlay.visibility = View.VISIBLE }
         }
         // v0.71: раскрыть/свернуть ВСЮ переписку одним тапом (пузыри по умолчанию — 3 строки)
         val expandAllBtn = tv("⤢", 16f, cFaint).apply {
             setPadding(dp(10), dp(6), dp(10), dp(6))
-            contentDescription = tr("раскрыть или свернуть всю переписку", "expand or collapse the whole conversation")
+            contentDescription = tr("раскрыть или свернуть всю переписку", "expand or collapse the whole conversation", "espandi o comprimi tutta la conversazione")
             setOnClickListener {
                 feedExpandAll = !feedExpandAll
                 feedExpanded.clear()
@@ -504,7 +504,7 @@ class MainActivity : AppCompatActivity() {
         head.addView(expandAllBtn)
         voiceBtn = tv("🔈", 16f, cDim).apply {
             setPadding(dp(10), dp(6), dp(10), dp(6))
-            contentDescription = tr("выключить или включить голос (переписка остаётся)", "turn voice off or on (conversation stays)")
+            contentDescription = tr("выключить или включить голос (переписка остаётся)", "turn voice off or on (conversation stays)", "attiva o disattiva la voce (la chat rimane)")
             setOnClickListener {
                 ensureService { svc -> svc.toggleVoiceOff() }
             }
@@ -576,12 +576,12 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { onClick() }
         }
         val stripRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val bBack = stripBtn(tr("−10с", "−10s"), tr("назад на 10 секунд", "back 10 seconds")) { BridgeService.instance?.nudgeMs(-10000) }
-        val bFwd = stripBtn(tr("+10с", "+10s"), tr("вперёд на 10 секунд", "forward 10 seconds")) { BridgeService.instance?.nudgeMs(10000) }
-        val bSlow = stripBtn("−", tr("медленнее", "slower")) {
+        val bBack = stripBtn(tr("−10с", "−10s"), tr("назад на 10 секунд", "back 10 seconds", "indietro di 10 secondi")) { BridgeService.instance?.nudgeMs(-10000) }
+        val bFwd = stripBtn(tr("+10с", "+10s"), tr("вперёд на 10 секунд", "forward 10 seconds", "avanti di 10 secondi")) { BridgeService.instance?.nudgeMs(10000) }
+        val bSlow = stripBtn("−", tr("медленнее", "slower", "più lento")) {
             speedLabel.text = "%.1f×".format(BridgeService.instance?.nudgeSpeed(-0.1f) ?: Cfg.speed)
         }
-        val bFast = stripBtn("+", tr("быстрее", "faster")) {
+        val bFast = stripBtn("+", tr("быстрее", "faster", "più veloce")) {
             speedLabel.text = "%.1f×".format(BridgeService.instance?.nudgeSpeed(0.1f) ?: Cfg.speed)
         }
         for ((i, b) in listOf(bBack, bFwd, bSlow, speedLabel, bFast).withIndex()) {
@@ -600,7 +600,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // круг-тангента: цвет и подпись = состояние рации
-        circleBig = tv(tr("говорить", "talk"), 15f, cBg, bold = true).apply { gravity = Gravity.CENTER }
+        circleBig = tv(tr("говорить", "talk", "parla"), 15f, cBg, bold = true).apply { gravity = Gravity.CENTER }
         circleSub = tv("", 9.5f, cBg).apply { gravity = Gravity.CENTER; alpha = 0.75f }
         circle = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -608,7 +608,7 @@ class MainActivity : AppCompatActivity() {
             background = circleBg(cPlay, cAccSoft)
             addView(circleBig)
             addView(circleSub)
-            contentDescription = tr("тангента: говорить, отправить, прервать", "the circle: talk, send, interrupt")
+            contentDescription = tr("тангента: говорить, отправить, прервать", "the circle: talk, send, interrupt", "pulsante centrale: parla, invia, interrompi")
             setOnClickListener { circleTap() }
             setOnLongClickListener { powerToggle(); true }
         }
@@ -621,25 +621,25 @@ class MainActivity : AppCompatActivity() {
                 Cfg.save(this@MainActivity)
                 autoSendSwitchRef?.isChecked = Cfg.autoSend
                 LogBus.add(
-                    if (Cfg.autoSend) tr("режим отправки: таймер тишины включён", "send mode: silence timer is on")
-                    else tr("режим отправки: только «отправляй», кнопка и тангента", "send mode: only “send”, the button and the circle")
+                    if (Cfg.autoSend) tr("режим отправки: таймер тишины включён", "send mode: silence timer is on", "invio automatico dopo una pausa attivato")
+                    else tr("режим отправки: только «отправляй», кнопка и тангента", "send mode: only “send”, the button and the circle", "invio con “invia” o con un pulsante")
                 )
                 true
             }
         }
-        cancelBtn = tv(tr("✕ отмена", "✕ cancel"), 11f, cDim).apply {
+        cancelBtn = tv(tr("✕ отмена", "✕ cancel", "✕ annulla"), 11f, cDim).apply {
             background = bordered(10)
             setPadding(dp(10), dp(4), dp(10), dp(4))
             visibility = View.GONE
-            contentDescription = tr("стереть черновик", "erase draft")
+            contentDescription = tr("стереть черновик", "erase draft", "cancella la bozza")
             setOnClickListener { BridgeService.instance?.onCancel() }
         }
         // v0.71: круг во время озвучки ставит паузу — «прервать и говорить» живёт здесь
-        talkBtn = tv(tr("🎙 прервать и говорить", "🎙 interrupt and talk"), 11f, cDim).apply {
+        talkBtn = tv(tr("🎙 прервать и говорить", "🎙 interrupt and talk", "🎙 interrompi e parla"), 11f, cDim).apply {
             background = bordered(10)
             setPadding(dp(10), dp(4), dp(10), dp(4))
             visibility = View.GONE
-            contentDescription = tr("оборвать озвучку и диктовать", "cut off the voice and dictate")
+            contentDescription = tr("оборвать озвучку и диктовать", "cut off the voice and dictate", "interrompi l'audio e detta")
             setOnClickListener { BridgeService.instance?.talkNow() }
         }
         // v0.71.1: подсказка и кнопки — ДВУМЯ рядами. Однострочный ряд «подсказка + отмена +
@@ -667,9 +667,9 @@ class MainActivity : AppCompatActivity() {
             contentDescription = desc
             setOnClickListener { onClick() }
         }
-        dockPause = dockBtn(tr("⏸ пауза", "⏸ pause"), tr("пауза и продолжение", "pause and resume")) {
+        dockPause = dockBtn(tr("⏸ пауза", "⏸ pause", "⏸ pausa"), tr("пауза и продолжение", "pause and resume", "pausa e ripresa")) {
             val svc = BridgeService.instance
-            if (svc == null || !BridgeService.running) { LogBus.add(tr("рация выключена", "radio is off")); return@dockBtn }
+            if (svc == null || !BridgeService.running) { LogBus.add(tr("рация выключена", "radio is off", "ClAudio Codice è spento")); return@dockBtn }
             when {
                 svc.isPaused() -> svc.resumePlayback()
                 svc.isPlaying() -> svc.pausePlayback()
@@ -683,8 +683,8 @@ class MainActivity : AppCompatActivity() {
         dockPause.setOnLongClickListener {
             BridgeService.instance?.stopPlayback(false); true
         }
-        val dockCh = dockBtn(tr("каналы", "channels"), tr("список каналов", "channel list")) { openSheet() }
-        val dockLog = dockBtn(tr("журнал", "log"), tr("журнал и отладка", "log and debug")) { debugOverlay.visibility = View.VISIBLE; renderLog() }
+        val dockCh = dockBtn(tr("каналы", "channels", "canali"), tr("список каналов", "channel list", "elenco dei canali")) { openSheet() }
+        val dockLog = dockBtn(tr("журнал", "log", "registro"), tr("журнал и отладка", "log and debug", "registro e diagnostica")) { debugOverlay.visibility = View.VISIBLE; renderLog() }
         val dock = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             for ((i, b) in listOf(dockPause, dockCh, dockLog).withIndex()) {
@@ -695,7 +695,7 @@ class MainActivity : AppCompatActivity() {
         // окно текста: строка ввода + «➤». Адресат — канал, открытый в ленте (туда же ляжет пузырь).
         // Движок и адресат голоса не трогаются: набор текста не меняет, куда уйдёт диктовка.
         textEdit = EditText(this).apply {
-            hint = tr("написать текстом…", "type a message…")
+            hint = tr("написать текстом…", "type a message…", "scrivi un messaggio…")
             setHintTextColor(cFaint)
             setTextColor(cText)
             textSize = 14f
@@ -704,13 +704,13 @@ class MainActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             maxLines = 4
-            contentDescription = tr("текст сообщения в открытый канал", "message text for the open channel")
+            contentDescription = tr("текст сообщения в открытый канал", "message text for the open channel", "testo del messaggio per il canale aperto")
         }
         textSendBtn = tv("➤", 18f, cPlay).apply {
             gravity = Gravity.CENTER
             background = bordered(14)
             setPadding(dp(12), dp(6), dp(12), dp(6))
-            contentDescription = tr("отправить текст в открытый канал", "send text to the open channel")
+            contentDescription = tr("отправить текст в открытый канал", "send text to the open channel", "invia il testo al canale aperto")
             setOnClickListener { sendTyped() }
         }
         textStatus = tv("", 10f, cFaint).apply {
@@ -721,7 +721,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             background = bordered(14)
             setPadding(dp(10), dp(6), dp(10), dp(6))
-            contentDescription = tr("отправить файл в открытый канал хаба", "send a file to the open hub channel")
+            contentDescription = tr("отправить файл в открытый канал хаба", "send a file to the open hub channel", "invia un file al canale dell'hub aperto")
             setOnClickListener { pickFileForChannel() }
             if (BuildConfig.FLAVOR == "store") visibility = View.GONE
         }
@@ -763,32 +763,32 @@ class MainActivity : AppCompatActivity() {
         val sid = feedSid.ifEmpty { currentSid() }
         val name = feedName()
         if (sid.isEmpty()) {
-            showTextStatus(tr("не знаю, кому отправить: выбери канал в «каналы»", "don't know who to send to: pick a channel in “channels”"), cPlay)
+            showTextStatus(tr("не знаю, кому отправить: выбери канал в «каналы»", "don't know who to send to: pick a channel in “channels”", "scegli il destinatario in “canali”"), cPlay)
             return
         }
         val client = try {
             Net.client(Cfg.pin).newBuilder().callTimeout(20, java.util.concurrent.TimeUnit.SECONDS).build()
         } catch (e: Exception) {
-            showTextStatus(tr("не ушло: кривой пин в настройках", "not sent: bad pin in settings"), cPlay)
+            showTextStatus(tr("не ушло: кривой пин в настройках", "not sent: bad pin in settings", "invio fallito: impronta del certificato non valida"), cPlay)
             return
         }
-        val body = JSONObject().put("session_id", sid).put("text", tr("(набрано текстом) $raw", "(typed) $raw")).toString()
+        val body = JSONObject().put("session_id", sid).put("text", tr("(набрано текстом) $raw", "(typed) $raw", "(scritto) $raw")).toString()
             .toRequestBody("application/json; charset=utf-8".toMediaType())
         val req = try {
             Request.Builder().url("${Cfg.url}/say?token=${Cfg.token}").post(body).build()
         } catch (e: Exception) {
-            showTextStatus(tr("не ушло: кривой адрес релея в настройках", "not sent: bad relay address in settings"), cPlay)
+            showTextStatus(tr("не ушло: кривой адрес релея в настройках", "not sent: bad relay address in settings", "invio fallito: indirizzo del relay non valido"), cPlay)
             return
         }
         textSending = true
         textSendBtn.alpha = 0.4f
-        showTextStatus(tr("отправляю в «$name»…", "sending to “$name”…"), cFaint)
+        showTextStatus(tr("отправляю в «$name»…", "sending to “$name”…", "invio a “$name”…"), cFaint)
         client.newCall(req).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 main.post {
                     textSending = false
                     textSendBtn.alpha = 1f
-                    showTextStatus(tr("не ушло: нет связи — текст остался в поле", "not sent: offline — text stayed in the field"), cPlay)
+                    showTextStatus(tr("не ушло: нет связи — текст остался в поле", "not sent: offline — text stayed in the field", "invio fallito: nessuna connessione — il testo è ancora nel campo"), cPlay)
                     LogBus.add(tr("текст НЕ ушёл в «$name»: ${e.message}", "text NOT sent to “$name”: ${e.message}"))
                 }
             }
@@ -803,7 +803,7 @@ class MainActivity : AppCompatActivity() {
                     textSending = false
                     textSendBtn.alpha = 1f
                     if (!ok) {
-                        showTextStatus(tr("не ушло: релей ответил $code — текст остался в поле", "not sent: relay replied $code — text stayed in the field"), cPlay)
+                        showTextStatus(tr("не ушло: релей ответил $code — текст остался в поле", "not sent: relay replied $code — text stayed in the field", "invio fallito: risposta $code del relay — il testo è ancora nel campo"), cPlay)
                         LogBus.add(tr("текст НЕ ушёл в «$name»: $code ${respBody?.take(80)}", "text NOT sent to “$name”: $code ${respBody?.take(80)}"))
                         return@post
                     }
@@ -813,8 +813,8 @@ class MainActivity : AppCompatActivity() {
                         else HapticFeedbackConstants.VIRTUAL_KEY
                     )
                     showTextStatus(
-                        if (unread) tr("ушло в «$name», но канал не слушает — текст ждёт в очереди", "sent to “$name”, but the channel isn't listening — text waits in the queue")
-                        else tr("ушло в «$name» ✓", "sent to “$name” ✓"),
+                        if (unread) tr("ушло в «$name», но канал не слушает — текст ждёт в очереди", "sent to “$name”, but the channel isn't listening — text waits in the queue", "inviato a “$name”, ma il canale non riceve — il testo resta in coda")
+                        else tr("ушло в «$name» ✓", "sent to “$name” ✓", "inviato a “$name” ✓"),
                         if (unread) cPlay else cDim
                     )
                     LogBus.add(tr("текстом в «$name»: ${raw.take(60)}", "typed to “$name”: ${raw.take(60)}"))
@@ -831,13 +831,13 @@ class MainActivity : AppCompatActivity() {
         if (Cfg.token.isEmpty() || Cfg.url.isEmpty()) { onboardOverlay.visibility = View.VISIBLE; return }
         val sid = feedSid.ifEmpty { currentSid() }
         if (!sid.startsWith("hub-") || isHubControl(sid)) {
-            showTextStatus(tr("файл можно отправить только в канал хаба: открой его в ленте", "a file can only go to a hub channel: open it in the feed"), cPlay)
+            showTextStatus(tr("файл можно отправить только в канал хаба: открой его в ленте", "a file can only go to a hub channel: open it in the feed", "per inviare un file, apri un canale dell'hub"), cPlay)
             return
         }
         fileTargetSid = sid
         fileTargetName = feedName()
         try { pickFile.launch(arrayOf("*/*")) }
-        catch (_: Exception) { showTextStatus(tr("на телефоне нечем выбрать файл", "no app on the phone to pick a file"), cPlay) }
+        catch (_: Exception) { showTextStatus(tr("на телефоне нечем выбрать файл", "no app on the phone to pick a file", "nessuna app disponibile per scegliere un file"), cPlay) }
     }
 
     private fun sendFile(uri: Uri) {
@@ -857,10 +857,10 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (_: Exception) {}
         if (size > fileLimit) {
-            showTextStatus(tr("«$name» больше 20 МБ — релей его не примет", "“$name” is over 20 MB — the relay won't accept it"), cPlay)
+            showTextStatus(tr("«$name» больше 20 МБ — релей его не примет", "“$name” is over 20 MB — the relay won't accept it", "“$name” supera 20 MB — il relay non lo accetta"), cPlay)
             return
         }
-        showTextStatus(tr("отправляю «$name» в «$chName»…", "sending “$name” to “$chName”…"), cFaint)
+        showTextStatus(tr("отправляю «$name» в «$chName»…", "sending “$name” to “$chName”…", "invio di “$name” a “$chName”…"), cFaint)
         Thread {
             val bytes = try {
                 contentResolver.openInputStream(uri)?.use { input ->
@@ -874,9 +874,9 @@ class MainActivity : AppCompatActivity() {
                     out.toByteArray()
                 }
             } catch (_: Exception) { null }
-            if (bytes == null) { main.post { showTextStatus(tr("не смог прочитать «$name»", "couldn't read “$name”"), cPlay) }; return@Thread }
+            if (bytes == null) { main.post { showTextStatus(tr("не смог прочитать «$name»", "couldn't read “$name”", "impossibile leggere “$name”"), cPlay) }; return@Thread }
             if (bytes.size > fileLimit) {
-                main.post { showTextStatus(tr("«$name» больше 20 МБ — релей его не примет", "“$name” is over 20 MB — the relay won't accept it"), cPlay) }
+                main.post { showTextStatus(tr("«$name» больше 20 МБ — релей его не примет", "“$name” is over 20 MB — the relay won't accept it", "“$name” supera 20 MB — il relay non lo accetta"), cPlay) }
                 return@Thread
             }
             val nameb = android.util.Base64.encodeToString(name.toByteArray(Charsets.UTF_8),
@@ -889,16 +889,16 @@ class MainActivity : AppCompatActivity() {
                     .url("${Cfg.url}/hubfile?token=${Cfg.token}&session=${Uri.encode(sid)}&nameb=$nameb")
                     .post(bytes.toRequestBody("application/octet-stream".toMediaType()))
                     .build()
-                client.newCall(req).execute().use { r -> if (!r.isSuccessful) result = tr("релей ответил ${r.code}", "relay replied ${r.code}") }
+                client.newCall(req).execute().use { r -> if (!r.isSuccessful) result = tr("релей ответил ${r.code}", "relay replied ${r.code}", "il relay ha risposto ${r.code}") }
             } catch (e: Exception) {
-                result = tr("нет связи", "offline")
+                result = tr("нет связи", "offline", "non connesso")
             }
             main.post {
                 if (result.isEmpty()) {
-                    showTextStatus(tr("«$name» ушёл в «$chName»: хаб скажет «файл получил»", "“$name” sent to “$chName”: the hub will say “file received”"), cFaint)
+                    showTextStatus(tr("«$name» ушёл в «$chName»: хаб скажет «файл получил»", "“$name” sent to “$chName”: the hub will say “file received”", "“$name” inviato a “$chName”: l'hub confermerà la ricezione"), cFaint)
                     LogBus.add(tr("файл ушёл в «$chName»: $name, ${bytes.size / 1024} КБ", "file sent to “$chName”: $name, ${bytes.size / 1024} KB"))
                 } else {
-                    showTextStatus(tr("«$name» не ушёл: $result", "“$name” not sent: $result"), cPlay)
+                    showTextStatus(tr("«$name» не ушёл: $result", "“$name” not sent: $result", "“$name” non inviato: $result"), cPlay)
                     LogBus.add(tr("файл НЕ ушёл в «$chName»: $result", "file NOT sent to “$chName”: $result"))
                 }
             }
@@ -1025,23 +1025,23 @@ class MainActivity : AppCompatActivity() {
         // v1.43: читаю не тот канал, куда уйдёт голос — сказать это прямо на чипе
         val tgtSid = if (running) svc!!.replyTargetSid() else Cfg.replyTarget
         val viewing = if (viewSid.isNotEmpty() && viewSid != tgtSid && !SessionBook.isForgotten(this, viewSid))
-            tr("  ·  смотрю ", "  ·  viewing ") + feedName() else ""
+            tr("  ·  смотрю ", "  ·  viewing ", "  ·  stai leggendo ") + feedName() else ""
         // v1.44 (ревью v1.43): набранное уходит в канал ленты, голос — адресату. Подсказка
         // поля называет, куда уйдёт текст, чтобы расхождение было видно до отправки
-        val hintNow = tr("в «", "to “") + feedName() + tr("»: написать…", "”: type…")
+        val hintNow = tr("в «", "to “", "a “") + feedName() + tr("»: написать…", "”: type…", "”: scrivi…")
         if (textEdit.hint?.toString() != hintNow) textEdit.hint = hintNow
-        chipBtn.text = "▾ " + name + viewing + (if (Cfg.pickedSids.isNotEmpty()) "  ·  " + Cfg.pickedSids.split(",").count { it.isNotBlank() } + tr(" в работе", " active") else "")
+        chipBtn.text = "▾ " + name + viewing + (if (Cfg.pickedSids.isNotEmpty()) "  ·  " + Cfg.pickedSids.split(",").count { it.isNotBlank() } + tr(" в работе", " active", " attivi") else "")
 
         // микрофон-мьют в шапке
         val muted = running && svc!!.isMicMuted()
         muteBtn.setTextColor(if (muted) cPlay else cFaint)
-        muteBtn.text = if (muted) tr("🔇 выкл", "🔇 off") else "🔇"
+        muteBtn.text = if (muted) tr("🔇 выкл", "🔇 off", "🔇 spento") else "🔇"
         voiceBtn.setTextColor(if (Cfg.voiceOff) cPlay else cFaint)
-        voiceBtn.text = if (Cfg.voiceOff) tr("🔈 выкл", "🔈 off") else "🔈"
+        voiceBtn.text = if (Cfg.voiceOff) tr("🔈 выкл", "🔈 off", "🔈 spenta") else "🔈"
 
         // круг
-        val draft = st.startsWith(tr("СЛУШАЮ · есть черновик", "LISTENING · draft in progress"))
-        val playingWho = st.substringAfter(tr("ИГРАЮ · ", "PLAYING · "), "").ifEmpty { tr("ответ", "reply") }
+        val draft = st.startsWith(tr("СЛУШАЮ · есть черновик", "LISTENING · draft in progress", "IN ASCOLTO · bozza in corso"))
+        val playingWho = st.substringAfter(tr("ИГРАЮ · ", "PLAYING · ", "RIPRODUZIONE · "), "").ifEmpty { tr("ответ", "reply", "rispondi") }
         // Порядок веток = порядок правды: озвучка ВСЕГДА раньше состояний микрофона,
         // иначе круг маскирует играющий ответ (ревью v0.69). Пауза/играю — по геттерам,
         // а не префиксам: «ПАУЗА ДИКТОВКИ» тоже начинается с «ПАУЗА».
@@ -1052,33 +1052,33 @@ class MainActivity : AppCompatActivity() {
         val inner: Int; val ring: Int; val fg: Int; val big: String; val sub: String
         when {
             !running -> { key = "off"; inner = cMic; ring = 0x14FFFFFF; fg = cDim
-                big = tr("выключена", "off"); sub = tr("тап — включить", "tap — turn on") }
+                big = tr("выключена", "off", "spento"); sub = tr("тап — включить", "tap — turn on", "tocca per accendere") }
             Cfg.voiceOff -> { key = "voiceoff"; inner = cMic; ring = 0x14FFFFFF; fg = cDim
-                big = tr("без голоса", "voice off"); sub = if (st.startsWith(tr("НЕТ СВЯЗИ", "OFFLINE"))) tr("нет связи · переподключаюсь", "offline · reconnecting") else tr("тап — включить голос", "tap — turn voice on") }
+                big = tr("без голоса", "voice off", "voce spenta"); sub = if (st.startsWith(tr("НЕТ СВЯЗИ", "OFFLINE", "NON CONNESSO"))) tr("нет связи · переподключаюсь", "offline · reconnecting", "non connesso · riconnessione") else tr("тап — включить голос", "tap — turn voice on", "tocca per attivare la voce") }
             // v0.75: зазор между каналами — круг предлагает ответить ТОМУ, кто только что
             // договорил, пока следующий канал ждёт своей очереди
             boundSid.isNotEmpty() -> { key = "bound$boundSid"; inner = cPlay; ring = cAccSoft; fg = cBg
-                big = tr("ответить", "reply"); sub = svc!!.lastSpokenName() }
-            st.startsWith(tr("НЕТ СВЯЗИ", "OFFLINE")) -> { key = "nolink"; inner = cWarn; ring = 0x14FFFFFF; fg = cText
-                big = tr("нет связи", "offline"); sub = tr("переподключаюсь…", "reconnecting…") }
+                big = tr("ответить", "reply", "rispondi"); sub = svc!!.lastSpokenName() }
+            st.startsWith(tr("НЕТ СВЯЗИ", "OFFLINE", "NON CONNESSO")) -> { key = "nolink"; inner = cWarn; ring = 0x14FFFFFF; fg = cText
+                big = tr("нет связи", "offline", "non connesso"); sub = tr("переподключаюсь…", "reconnecting…", "riconnessione…") }
             svc!!.isPaused() -> { key = "paused"; inner = cWarn; ring = 0x14FFFFFF; fg = cText
-                big = tr("пауза", "paused"); sub = tr("тап — дальше", "tap — continue") }
+                big = tr("пауза", "paused", "in pausa"); sub = tr("тап — дальше", "tap — continue", "tocca per continuare") }
             svc.isPlaying() -> { key = "play$playingWho"; inner = cLive; ring = cAccSoft; fg = cBg
-                big = tr("играю", "playing"); sub = playingWho }
+                big = tr("играю", "playing", "riproduzione"); sub = playingWho }
             draft -> { key = "draft"; inner = cPlay; ring = cAccSoft; fg = cBg
-                big = tr("слушаю", "listening"); sub = tr("тап — отправить", "tap — send") }
-            st.startsWith(tr("СЛУШАЮ", "LISTENING")) -> { key = "listen"; inner = cPlay; ring = cAccSoft; fg = cBg
-                big = tr("слушаю", "listening"); sub = tr("говори", "speak") }
+                big = tr("слушаю", "listening", "in ascolto"); sub = tr("тап — отправить", "tap — send", "tocca per inviare") }
+            st.startsWith(tr("СЛУШАЮ", "LISTENING", "IN ASCOLTO")) -> { key = "listen"; inner = cPlay; ring = cAccSoft; fg = cBg
+                big = tr("слушаю", "listening", "in ascolto"); sub = tr("говори", "speak", "parla") }
             // dictHold: и пауза диктовки, и «не слушать» — движок их не различает,
             // подпись честно-нейтральная (черновик, если был, цел)
             svc.hasPendingDictation() -> { key = "micoff"; inner = cMic; ring = cAccSoft; fg = cText
-                big = tr("микрофон спит", "mic asleep"); sub = tr("тап — включить", "tap — turn on") }
-            st.startsWith(tr("ОТПРАВЛЕНО", "SENT")) -> { key = "sent"; inner = cCard; ring = cAccSoft; fg = cText
-                big = tr("ушло ✓", "sent ✓"); sub = tr("тап — сказать ещё", "tap — say more") }
-            st.startsWith(tr("ЖДУ НАУШНИКИ", "WAITING FOR HEADPHONES")) -> { key = "waitHs"; inner = cWarn; ring = 0x14FFFFFF; fg = cText
-                big = tr("жду наушники", "waiting for headphones"); sub = tr("ответы копятся", "replies pile up") }
+                big = tr("микрофон спит", "mic asleep", "microfono in attesa"); sub = tr("тап — включить", "tap — turn on", "tocca per accendere") }
+            st.startsWith(tr("ОТПРАВЛЕНО", "SENT", "INVIATO")) -> { key = "sent"; inner = cCard; ring = cAccSoft; fg = cText
+                big = tr("ушло ✓", "sent ✓", "inviato ✓"); sub = tr("тап — сказать ещё", "tap — say more", "tocca per parlare ancora") }
+            st.startsWith(tr("ЖДУ НАУШНИКИ", "WAITING FOR HEADPHONES", "IN ATTESA DEGLI AURICOLARI")) -> { key = "waitHs"; inner = cWarn; ring = 0x14FFFFFF; fg = cText
+                big = tr("жду наушники", "waiting for headphones", "in attesa degli auricolari"); sub = tr("ответы копятся", "replies pile up", "le risposte restano in coda") }
             else -> { key = "idle"; inner = cCard; ring = 0x14FFFFFF; fg = cText
-                big = tr("на связи", "online"); sub = tr("тап — говорить", "tap — talk") }
+                big = tr("на связи", "online", "connesso"); sub = tr("тап — говорить", "tap — talk", "tocca per parlare") }
         }
         if (key != lastCircleKey) {
             lastCircleKey = key
@@ -1091,17 +1091,17 @@ class MainActivity : AppCompatActivity() {
 
         // подсказка + отмена
         hintText.text = when {
-            !running -> tr("долгий тап по кругу — вкл и выкл рации", "long tap on the circle — radio on and off")
-            Cfg.token.isEmpty() -> tr("рация не настроена — открой ⚙", "radio not set up — open ⚙")
+            !running -> tr("долгий тап по кругу — вкл и выкл рации", "long tap on the circle — radio on and off", "tieni premuto il cerchio per accendere o spegnere")
+            Cfg.token.isEmpty() -> tr("рация не настроена — открой ⚙", "radio not set up — open ⚙", "configurazione necessaria — apri ⚙")
             !svc!!.isListening() && svc.boundaryReplySid().isNotEmpty() ->
-                tr("12с на ответ · дальше «", "12s to reply · next “") + svc.boundaryNextName() + tr("» · тап — ответить", "” · tap — reply")
-            svc.isPaused() -> tr("тап по кругу — продолжить с того же места", "tap the circle — continue from the same spot")
-            svc.isPlaying() -> tr("тап по кругу — пауза с этого места", "tap the circle — pause here")
-            st.startsWith(tr("СЛУШАЮ", "LISTENING")) && Cfg.autoSend -> tr("замолчи или скажи «отправляй» — уйдёт само", "stop talking or say “send” — it goes by itself")
-            st.startsWith(tr("СЛУШАЮ", "LISTENING")) -> tr("скажи «отправляй» — таймеров тишины нет", "say “send” — no silence timers")
-            st.startsWith(tr("ЖДУ НАУШНИКИ", "WAITING FOR HEADPHONES")) -> tr("надень наушники или выключи «только в наушниках»", "put on headphones or turn off “headphones only”")
-            st.startsWith(tr("ОТПРАВЛЕНО", "SENT")) -> tr("микрофон спит — кнопка гарнитуры тоже будит", "mic asleep — the headset button wakes it too")
-            else -> tr("долгий тап — выключить рацию", "long tap — turn the radio off")
+                tr("12с на ответ · дальше «", "12s to reply · next “", "12 s per rispondere · poi “") + svc.boundaryNextName() + tr("» · тап — ответить", "” · tap — reply", "” · tocca per rispondere")
+            svc.isPaused() -> tr("тап по кругу — продолжить с того же места", "tap the circle — continue from the same spot", "tocca il cerchio per riprendere dallo stesso punto")
+            svc.isPlaying() -> tr("тап по кругу — пауза с этого места", "tap the circle — pause here", "tocca il cerchio per mettere in pausa")
+            st.startsWith(tr("СЛУШАЮ", "LISTENING", "IN ASCOLTO")) && Cfg.autoSend -> tr("замолчи или скажи «отправляй» — уйдёт само", "stop talking or say “send” — it goes by itself", "fai una pausa o di' “invia” per inviare")
+            st.startsWith(tr("СЛУШАЮ", "LISTENING", "IN ASCOLTO")) -> tr("скажи «отправляй» — таймеров тишины нет", "say “send” — no silence timers", "di' “invia” — nessun invio dopo il silenzio")
+            st.startsWith(tr("ЖДУ НАУШНИКИ", "WAITING FOR HEADPHONES", "IN ATTESA DEGLI AURICOLARI")) -> tr("надень наушники или выключи «только в наушниках»", "put on headphones or turn off “headphones only”", "indossa gli auricolari o disattiva “solo auricolari”")
+            st.startsWith(tr("ОТПРАВЛЕНО", "SENT", "INVIATO")) -> tr("микрофон спит — кнопка гарнитуры тоже будит", "mic asleep — the headset button wakes it too", "microfono in attesa — lo riattivi anche dagli auricolari")
+            else -> tr("долгий тап — выключить рацию", "long tap — turn the radio off", "tieni premuto per spegnere")
         }
         cancelBtn.visibility =
             if (running && (svc!!.isListening() || svc.hasPendingDictation())) View.VISIBLE else View.GONE
@@ -1112,7 +1112,7 @@ class MainActivity : AppCompatActivity() {
         val held = if (running) svc!!.heldCount() else 0
         when {
             held > 0 -> {
-                bannerBtn.text = tr("есть ответы ($held) — послушать ▶", "replies waiting ($held) — listen ▶")
+                bannerBtn.text = tr("есть ответы ($held) — послушать ▶", "replies waiting ($held) — listen ▶", "risposte in coda ($held) — ascolta ▶")
                 bannerBtn.background = rounded(cPlay, 12)
                 bannerBtn.setTextColor(cBg)
                 bannerBtn.visibility = View.VISIBLE
@@ -1123,10 +1123,10 @@ class MainActivity : AppCompatActivity() {
         // док: подпись строго согласована с действием клика (ревью v0.69 — «▶ дальше»
         // при играющей озвучке делала паузу); в покое кнопка честно становится повтором
         dockPause.text = when {
-            !running -> tr("⏸ пауза", "⏸ pause")
-            svc!!.isPaused() || (svc.hasPendingDictation() && !svc.isPlaying()) -> tr("▶ дальше", "▶ resume")
-            svc.isPlaying() || svc.isListening() -> tr("⏸ пауза", "⏸ pause")
-            else -> tr("↻ повтор", "↻ replay")
+            !running -> tr("⏸ пауза", "⏸ pause", "⏸ pausa")
+            svc!!.isPaused() || (svc.hasPendingDictation() && !svc.isPlaying()) -> tr("▶ дальше", "▶ resume", "▶ riprendi")
+            svc.isPlaying() || svc.isListening() -> tr("⏸ пауза", "⏸ pause", "⏸ pausa")
+            else -> tr("↻ повтор", "↻ replay", "↻ riascolta")
         }
 
         // плеер
@@ -1138,16 +1138,16 @@ class MainActivity : AppCompatActivity() {
             if (dur > 0 && !userScrubbing) {
                 scrubBar.progress = (pos.toFloat() / dur * 1000).toInt().coerceIn(0, 1000)
             }
-            playerLabel.text = (if (svc.isPaused()) tr("пауза · ", "paused · ") else tr("играю · ", "playing · ")) + fmt(pos) + " / " + fmt(dur)
+            playerLabel.text = (if (svc.isPaused()) tr("пауза · ", "paused · ", "in pausa · ") else tr("играю · ", "playing · ", "riproduzione · ")) + fmt(pos) + " / " + fmt(dur)
             val cur = "%.1f×".format(Cfg.speed)
             if (speedLabel.text != cur) speedLabel.text = cur
         }
 
         // отладка, если открыта
         if (debugOverlay.visibility == View.VISIBLE) {
-            debugTech.text = tr("состояние: ", "state: ") + (if (running) st else tr("СЕРВИС ВЫКЛЮЧЕН", "SERVICE OFF")) +
-                tr("\nадресат: ", "\ntarget: ") + (if (running) svc!!.replyTargetName() else "—") +
-                (if (Cfg.pickedSids.isNotEmpty()) tr(" · в работе: ", " · active: ") + (svc?.pickedNames() ?: "") else "") +
+            debugTech.text = tr("состояние: ", "state: ", "stato: ") + (if (running) st else tr("СЕРВИС ВЫКЛЮЧЕН", "SERVICE OFF", "SERVIZIO SPENTO")) +
+                tr("\nадресат: ", "\ntarget: ", "\ndestinatario: ") + (if (running) svc!!.replyTargetName() else "—") +
+                (if (Cfg.pickedSids.isNotEmpty()) tr(" · в работе: ", " · active: ", " · attivi: ") + (svc?.pickedNames() ?: "") else "") +
                 "\nclaudio code " + BridgeService.APP_VERSION + " · " + BuildConfig.FLAVOR
         }
     }
@@ -1325,7 +1325,7 @@ class MainActivity : AppCompatActivity() {
                 // Системные ходы (<task-notification>…, [SYSTEM…) — не речь юзера, не рисуем.
                 val system = m.ctx.startsWith("<") || m.ctx.startsWith("[SYSTEM")
                 if (!system && k !in echoKeys && k != prevCtx) {
-                    rows.add(Row(true, m.ctx, m.ts - 1, tr("ушло ✓", "sent ✓"), null, "c${m.msgid}"))
+                    rows.add(Row(true, m.ctx, m.ts - 1, tr("ушло ✓", "sent ✓", "inviato ✓"), null, "c${m.msgid}"))
                 }
                 prevCtx = k
             } else {
@@ -1334,7 +1334,7 @@ class MainActivity : AppCompatActivity() {
             val txt = m.texts.map { it.second }.filter { it.isNotBlank() }.joinToString(" ").trim()
             val secs = (m.bytes / 2500).coerceAtLeast(1)
             val durTxt = if (secs >= 60) "%d:%02d".format(secs / 60, secs % 60) else tr("${secs}с", "${secs}s")
-            rows.add(Row(false, txt.ifEmpty { tr("(голосовое, ~$durTxt)", "(voice message, ~$durTxt)") }, m.ts, "", m, "i${m.msgid}"))
+            rows.add(Row(false, txt.ifEmpty { tr("(голосовое, ~$durTxt)", "(voice message, ~$durTxt)", "(messaggio vocale, circa $durTxt)") }, m.ts, "", m, "i${m.msgid}"))
         }
         for (e in outs) {
             // relay режет текст utt_sent (с v0.71 — до 1000) — обрез не должен выглядеть потерей
@@ -1342,9 +1342,9 @@ class MainActivity : AppCompatActivity() {
             val key = "o${e.ts}:${e.text.hashCode()}"
             val owner = ctxOwner[norm(e.text)]?.removeFirstOrNull()
             if (owner != null) {
-                rows.add(Row(true, text, owner.ts - 1, tr("ушло ✓", "sent ✓"), null, key))
+                rows.add(Row(true, text, owner.ts - 1, tr("ушло ✓", "sent ✓", "inviato ✓"), null, key))
             } else {
-                rows.add(Row(true, text, e.ts, if (e.unread) tr("⚠ канал не слушал", "⚠ channel not listening") else tr("ушло ✓", "sent ✓"), null, key))
+                rows.add(Row(true, text, e.ts, if (e.unread) tr("⚠ канал не слушал", "⚠ channel not listening", "⚠ il canale non riceve") else tr("ушло ✓", "sent ✓", "inviato ✓"), null, key))
             }
         }
         rows.sortBy { it.ts }
@@ -1364,8 +1364,8 @@ class MainActivity : AppCompatActivity() {
         val scroll = ScrollView(this).apply { addView(body) }
         val dlg = androidx.appcompat.app.AlertDialog.Builder(this)
             .setView(scroll)
-            .setPositiveButton(tr("копировать всё", "copy all")) { _, _ -> copyText(text, window.decorView) }
-            .setNegativeButton(tr("закрыть", "close"), null)
+            .setPositiveButton(tr("копировать всё", "copy all", "copia tutto")) { _, _ -> copyText(text, window.decorView) }
+            .setNegativeButton(tr("закрыть", "close", "chiudi"), null)
             .create()
         dlg.show()
     }
@@ -1373,11 +1373,11 @@ class MainActivity : AppCompatActivity() {
     private fun copyText(text: String, from: View) {
         try {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText(tr("сообщение", "message"), text))
+            cm.setPrimaryClip(android.content.ClipData.newPlainText(tr("сообщение", "message", "messaggio"), text))
             from.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            android.widget.Toast.makeText(this, tr("текст скопирован", "text copied"), android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, tr("текст скопирован", "text copied", "testo copiato"), android.widget.Toast.LENGTH_SHORT).show()
         } catch (_: Exception) {
-            android.widget.Toast.makeText(this, tr("не удалось скопировать", "could not copy"), android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, tr("не удалось скопировать", "could not copy", "copia non riuscita"), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1400,9 +1400,9 @@ class MainActivity : AppCompatActivity() {
         feedBodies.clear()
         if (rows.isEmpty()) {
             val msg = when {
-                Cfg.token.isEmpty() -> tr("рация не настроена.\nоткрой первый запуск (⚙) или отсканируй QR со своего сервера", "radio not set up.\nopen first run (⚙) or scan the QR from your server")
-                offline -> tr("нет связи с релеем — лента появится, когда связь вернётся", "no connection to the relay — the feed will appear when it returns")
-                else -> tr("пока тихо.\nнажми круг и скажи что-нибудь — разговор появится здесь", "quiet so far.\ntap the circle and say something — the conversation will show up here")
+                Cfg.token.isEmpty() -> tr("рация не настроена.\nоткрой первый запуск (⚙) или отсканируй QR со своего сервера", "radio not set up.\nopen first run (⚙) or scan the QR from your server", "Configura ClAudio Codice.\nApri la configurazione iniziale (⚙) o scansiona il QR del tuo server.")
+                offline -> tr("нет связи с релеем — лента появится, когда связь вернётся", "no connection to the relay — the feed will appear when it returns", "nessuna connessione al relay — la chat apparirà alla riconnessione")
+                else -> tr("пока тихо.\nнажми круг и скажи что-нибудь — разговор появится здесь", "quiet so far.\ntap the circle and say something — the conversation will show up here", "Nessun messaggio.\nTocca il cerchio e parla: la conversazione apparirà qui.")
             }
             feedBox.addView(tv(msg, 12f, cFaint).apply {
                 gravity = Gravity.CENTER
@@ -1440,8 +1440,8 @@ class MainActivity : AppCompatActivity() {
                 background = rounded(if (r.out) cAccSoft else cCard, 14)
                 setPadding(dp(11), dp(7), dp(11), dp(8))
             }
-            val who = if (r.out) tr("ты · ${hhmm(r.ts)}", "you · ${hhmm(r.ts)}") + (if (r.note.isNotEmpty()) " · ${r.note}" else "")
-            else tr("${r.inMsg?.proj?.ifEmpty { "канал" } ?: "канал"} · ${hhmm(r.ts)}", "${r.inMsg?.proj?.ifEmpty { "channel" } ?: "channel"} · ${hhmm(r.ts)}")
+            val who = if (r.out) tr("ты · ${hhmm(r.ts)}", "you · ${hhmm(r.ts)}", "tu · ${hhmm(r.ts)}") + (if (r.note.isNotEmpty()) " · ${r.note}" else "")
+            else tr("${r.inMsg?.proj?.ifEmpty { "канал" } ?: "канал"} · ${hhmm(r.ts)}", "${r.inMsg?.proj?.ifEmpty { "channel" } ?: "channel"} · ${hhmm(r.ts)}", "${r.inMsg?.proj?.ifEmpty { "canale" } ?: "canale"} · ${hhmm(r.ts)}")
             val capRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1455,14 +1455,14 @@ class MainActivity : AppCompatActivity() {
                 val m = r.inMsg
                 capRow.addView(tv("▶", 11f, cPlay).apply {
                     setPadding(dp(10), 0, dp(2), 0)
-                    contentDescription = tr("послушать это сообщение", "listen to this message")
+                    contentDescription = tr("послушать это сообщение", "listen to this message", "ascolta questo messaggio")
                     setOnClickListener { playMsg(m, fromHere = false) }
                 }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             }
             // копирование отдельной кнопкой: долгое нажатие на входящем занято «отсюда и дальше»
             capRow.addView(tv("⧉", 17f, cDim).apply {
                 setPadding(dp(14), 0, dp(8), 0)
-                contentDescription = tr("копировать текст сообщения", "copy message text")
+                contentDescription = tr("копировать текст сообщения", "copy message text", "copia il testo del messaggio")
                 setOnClickListener { copyDialog(r.text) }
             }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             val body = tv(r.text, 13f, cText).apply {
@@ -1484,7 +1484,7 @@ class MainActivity : AppCompatActivity() {
                 // long press: a choice, so copying is reachable without hunting for the small ⧉
                 bub.setOnLongClickListener {
                     androidx.appcompat.app.AlertDialog.Builder(this)
-                        .setItems(arrayOf(tr("копировать текст", "copy text"), tr("слушать отсюда и дальше", "listen from here on"))) { _, which ->
+                        .setItems(arrayOf(tr("копировать текст", "copy text", "copia testo"), tr("слушать отсюда и дальше", "listen from here on", "ascolta da qui"))) { _, which ->
                             if (which == 0) copyDialog(r.text) else playMsg(m, fromHere = true)
                         }
                         .show()
@@ -1499,7 +1499,7 @@ class MainActivity : AppCompatActivity() {
                 topMargin = dp(6)
             })
         }
-        feedBox.addView(tv(tr("тап — раскрыть/свернуть · ▶ — послушать · долгий — отсюда и дальше · в раскрытом долгий по тексту — выделить", "tap — expand/collapse · ▶ — listen · long press — from here on · when expanded, long press on text — select"), 9.5f, cFaint).apply {
+        feedBox.addView(tv(tr("тап — раскрыть/свернуть · ▶ — послушать · долгий — отсюда и дальше · в раскрытом долгий по тексту — выделить", "tap — expand/collapse · ▶ — listen · long press — from here on · when expanded, long press on text — select", "tocca per espandere · ▶ ascolta · tieni premuto per ascoltare da qui · sul testo espanso, tieni premuto per selezionare"), 9.5f, cFaint).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, 0)
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -1513,7 +1513,7 @@ class MainActivity : AppCompatActivity() {
         val chosen = if (fromHere) lastMsgs.filter { it.ts >= m.ts }.sortedBy { it.ts } else listOf(m)
         val items = chosen.flatMap { mm -> mm.audios.map { Pair(it.second, mm.ts) } }
             .filter { it.first.isNotEmpty() }
-        if (items.isEmpty()) { LogBus.add(tr("у сообщения нет аудио", "this message has no audio")); return }
+        if (items.isEmpty()) { LogBus.add(tr("у сообщения нет аудио", "this message has no audio", "questo messaggio non ha audio")); return }
         LogBus.add(if (fromHere) tr("лента: играю с выбранного места (${items.size} ч.)", "feed: playing from the chosen spot (${items.size} parts)") else tr("лента: играю сообщение", "feed: playing the message"))
         // явное «слушать» с экрана: микрофон вниз, иначе этикет отложит озвучку (v0.73)
         // v1.43: текст выбранного — на случай, если звук на релее уже удалён (прочтёт вместо него)
@@ -1547,18 +1547,18 @@ class MainActivity : AppCompatActivity() {
                     setOnClickListener { onTap() }
                 }
             // v1.09 (слово юзера: «вернуть нужны не все, а конкретные — галочками»)
-            addView(sheetBtn(tr("✎ править", "✎ edit"), 1.1f) {
+            addView(sheetBtn(tr("✎ править", "✎ edit", "✎ modifica"), 1.1f) {
                 sheetEditMode = !sheetEditMode
                 if (sheetEditMode) { lastSessionsFetch = 0L; fetchSessions() }
                 rebuildSheet()
-            }.apply { contentDescription = tr("выбрать галочками, какие каналы держать в списке", "tick which channels to keep in the list") })
+            }.apply { contentDescription = tr("выбрать галочками, какие каналы держать в списке", "tick which channels to keep in the list", "seleziona i canali da tenere nell'elenco") })
             // v1.03 (слово юзера: «не вижу кнопку обновления списка каналов»)
-            addView(sheetBtn(tr("↻ обновить", "↻ refresh"), 1.15f) {
+            addView(sheetBtn(tr("↻ обновить", "↻ refresh", "↻ aggiorna"), 1.15f) {
                 lastSessionsFetch = 0L
                 fetchSessions()
-                LogBus.add(tr("список каналов обновляется с сервера", "channel list is refreshing from the server"))
+                LogBus.add(tr("список каналов обновляется с сервера", "channel list is refreshing from the server", "aggiornamento dei canali dal server"))
             })
-            addView(sheetBtn(tr("✕ закрыть", "✕ close"), 1.1f) { sheetOverlay.visibility = View.GONE })
+            addView(sheetBtn(tr("✕ закрыть", "✕ close", "✕ chiudi"), 1.1f) { sheetOverlay.visibility = View.GONE })
         }
         val listScroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = true
@@ -1593,18 +1593,18 @@ class MainActivity : AppCompatActivity() {
     private fun openHeldSheet(br: List<Triple<String, String, Int>>) {
         sheetMode = "held"
         sheetList.removeAllViews()
-        sheetList.addView(tv(tr("накопленные ответы", "saved replies"), 12f, cFaint))
+        sheetList.addView(tv(tr("накопленные ответы", "saved replies", "risposte in coda"), 12f, cFaint))
         for ((sid, proj, n) in br) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(4), dp(11), dp(4), dp(11))
             }
-            row.addView(tv(tr("$proj · $n ч.", "$proj · $n parts"), 13f, cText).apply {
+            row.addView(tv(tr("$proj · $n ч.", "$proj · $n parts", "$proj · $n parti"), 13f, cText).apply {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            row.addView(tv(tr("▶ слушать", "▶ listen"), 12f, cPlay).apply {
+            row.addView(tv(tr("▶ слушать", "▶ listen", "▶ ascolta"), 12f, cPlay).apply {
                 setPadding(dp(8), dp(2), dp(8), dp(2))
                 setOnClickListener {
                     BridgeService.instance?.playHeldFor(sid)
@@ -1613,7 +1613,7 @@ class MainActivity : AppCompatActivity() {
             })
             row.addView(tv("🎙", 13f, cDim).apply {
                 setPadding(dp(10), dp(2), dp(2), dp(2))
-                contentDescription = tr("ответить в этот канал", "reply to this channel")
+                contentDescription = tr("ответить в этот канал", "reply to this channel", "rispondi a questo canale")
                 setOnClickListener {
                     sheetOverlay.visibility = View.GONE
                     ensureService { it.replyToSession(sid) }
@@ -1621,7 +1621,7 @@ class MainActivity : AppCompatActivity() {
             })
             row.addView(tv("✕", 14f, cFaint).apply {
                 setPadding(dp(10), dp(2), dp(4), dp(2))
-                contentDescription = tr("пропустить ответы этого канала", "skip this channel's replies")
+                contentDescription = tr("пропустить ответы этого канала", "skip this channel's replies", "salta le risposte di questo canale")
                 setOnClickListener {
                     BridgeService.instance?.dropHeldFor(sid)
                     val nb = BridgeService.instance?.heldBreakdown().orEmpty()
@@ -1632,14 +1632,14 @@ class MainActivity : AppCompatActivity() {
             sheetList.addView(View(this).apply { setBackgroundColor(cLine) },
                 LinearLayout.LayoutParams(MATCH_PARENT, 1))
         }
-        sheetList.addView(tv(tr("все подряд ▶", "play all ▶"), 12.5f, cDim).apply {
+        sheetList.addView(tv(tr("все подряд ▶", "play all ▶", "ascolta tutto ▶"), 12.5f, cDim).apply {
             setPadding(dp(4), dp(12), dp(4), dp(6))
             setOnClickListener {
                 BridgeService.instance?.playHeldAll()
                 sheetOverlay.visibility = View.GONE
             }
         })
-        sheetList.addView(tv(tr("▶ слушать · 🎙 отвечать · ✕ пропустить (остаются в ленте)", "▶ listen · 🎙 reply · ✕ skip (they stay in the feed)"), 9.5f, cFaint).apply {
+        sheetList.addView(tv(tr("▶ слушать · 🎙 отвечать · ✕ пропустить (остаются в ленте)", "▶ listen · 🎙 reply · ✕ skip (they stay in the feed)", "▶ ascolta · 🎙 rispondi · ✕ salta (restano nella chat)"), 9.5f, cFaint).apply {
             setPadding(dp(4), dp(4), dp(4), 0)
         })
         sheetOverlay.visibility = View.VISIBLE
@@ -1708,7 +1708,7 @@ class MainActivity : AppCompatActivity() {
         sheetList.removeAllViews()
         val pickedNow = BridgeService.instance?.pickedNames().orEmpty()
         sheetList.addView(tv(
-            if (pickedNow.isEmpty()) tr("каналы · слышу все", "channels · hearing all") else tr("в работе: $pickedNow", "active: $pickedNow"),
+            if (pickedNow.isEmpty()) tr("каналы · слышу все", "channels · hearing all", "canali · ascolto tutti") else tr("в работе: $pickedNow", "active: $pickedNow", "attivi: $pickedNow"),
             12f, if (pickedNow.isEmpty()) cPlay else cPlay
         ))
         // Hub screens need the owner's hub server, which is not public yet: hidden in the store build.
@@ -1722,14 +1722,14 @@ class MainActivity : AppCompatActivity() {
                 fetchModels()
             }
             val (hSub, hCol) = hubHealthLine(lastModels)
-            val hubRow = linkRow(tr("хаб · каналы", "hub · channels"), hSub) { openHubChannels() }
+            val hubRow = linkRow(tr("хаб · каналы", "hub · channels", "hub · canali"), hSub) { openHubChannels() }
             hubHealthSub = ((hubRow.getChildAt(0) as? LinearLayout)?.getChildAt(1) as? TextView)?.also { it.setTextColor(hCol) }
             sheetList.addView(hubRow)
             sheetList.addView(divider(), LinearLayout.LayoutParams(MATCH_PARENT, 1))
         }
         val list = SessionBook.all()
         if (list.isEmpty()) {
-            sheetList.addView(tv(tr("(ещё не было ни одной озвучки)", "(no voice yet)"), 12f, cFaint).apply {
+            sheetList.addView(tv(tr("(ещё не было ни одной озвучки)", "(no voice yet)", "(nessun audio)"), 12f, cFaint).apply {
                 setPadding(0, dp(10), 0, dp(10))
             })
         }
@@ -1737,14 +1737,14 @@ class MainActivity : AppCompatActivity() {
 
         // v1.09: режим правки — ВСЕ каналы, которые знает сервер, с галочками
         if (sheetEditMode) {
-            sheetList.addView(tv(tr("отметь, какие каналы держать в списке", "tick which channels to keep in the list"), 11f, cFaint).apply {
+            sheetList.addView(tv(tr("отметь, какие каналы держать в списке", "tick which channels to keep in the list", "seleziona i canali da tenere nell'elenco"), 11f, cFaint).apply {
                 setPadding(dp(2), dp(6), dp(2), dp(8))
             })
             val known = LinkedHashMap<String, String>()
             for (e in list) known[e.sid] = e.proj.ifEmpty { e.sid.take(8) }
             for ((sid, nm) in serverSids) if (!known.containsKey(sid)) known[sid] = nm.ifEmpty { sid.take(8) }
             if (known.isEmpty()) {
-                sheetList.addView(tv(tr("сервер пока не отдал ни одного канала", "the server has not returned any channels yet"), 12f, cFaint))
+                sheetList.addView(tv(tr("сервер пока не отдал ни одного канала", "the server has not returned any channels yet", "il server non ha ancora restituito canali"), 12f, cFaint))
             }
             for ((sid, nm) in known) {
                 val inList = list.any { it.sid == sid }
@@ -1778,7 +1778,7 @@ class MainActivity : AppCompatActivity() {
                 sheetList.addView(View(this).apply { setBackgroundColor(cLine) },
                     LinearLayout.LayoutParams(MATCH_PARENT, 1))
             }
-            sheetList.addView(tv(tr("✓ готово", "✓ done"), 13f, cPlay).apply {
+            sheetList.addView(tv(tr("✓ готово", "✓ done", "✓ fatto"), 13f, cPlay).apply {
                 background = bordered(10)
                 gravity = Gravity.CENTER
                 setPadding(dp(10), dp(10), dp(10), dp(10))
@@ -1816,17 +1816,17 @@ class MainActivity : AppCompatActivity() {
             val mins = ((System.currentTimeMillis() - maxOf(askTs, e.lastTs)) / 60000).toInt()
             val stTxt: String; val stCol: Int
             when {
-                e.muted -> { stTxt = tr("выключен", "off"); stCol = cFaint }
-                deaf -> { stTxt = tr("не слушает", "not listening"); stCol = cWarn }
-                working -> { stTxt = tr("работает", "working") + (if (mins > 0) tr(" · $mins мин", " · $mins min") else ""); stCol = cPlay }
-                else -> { stTxt = tr("ответил · ", "replied · ") + timeAgo(e.lastTs); stCol = cFaint }
+                e.muted -> { stTxt = tr("выключен", "off", "spento"); stCol = cFaint }
+                deaf -> { stTxt = tr("не слушает", "not listening", "non riceve"); stCol = cWarn }
+                working -> { stTxt = tr("работает", "working", "sta lavorando") + (if (mins > 0) tr(" · $mins мин", " · $mins min") else ""); stCol = cPlay }
+                else -> { stTxt = tr("ответил · ", "replied · ", "ha risposto · ") + timeAgo(e.lastTs); stCol = cFaint }
             }
             // v0.82 (вопрос юзера: «объясни, что значат иконки»): подписи СЛОВАМИ.
             // Значки на ходу нечитаемы и требуют памяти — слово объясняет себя само.
-            val replyBtn = tv(tr("ответить", "reply"), 11.5f, if (target) cPlay else cDim).apply {
+            val replyBtn = tv(tr("ответить", "reply", "rispondi"), 11.5f, if (target) cPlay else cDim).apply {
                 background = bordered(8)
                 setPadding(dp(8), dp(4), dp(8), dp(4))
-                contentDescription = tr("отвечать в этот канал прямо сейчас", "reply to this channel right now")
+                contentDescription = tr("отвечать в этот канал прямо сейчас", "reply to this channel right now", "rispondi subito a questo canale")
                 setOnClickListener {
                     sheetOverlay.visibility = View.GONE
                     viewSid = e.sid   // v1.43: отвечаю туда — туда и смотрю
@@ -1836,10 +1836,10 @@ class MainActivity : AppCompatActivity() {
             }
             // v0.82 (слово юзера: «хочу выбрать пару каналов из пяти и ВИДЕТЬ, какие»).
             // Набор: пусто = слышу всех; иначе слышны ровно отмеченные.
-            val soloBtn = tv(if (solo) tr("✓ в работе", "✓ active") else tr("в работу", "make active"), 11.5f, if (solo) cPlay else cDim).apply {
+            val soloBtn = tv(if (solo) tr("✓ в работе", "✓ active", "✓ attivo") else tr("в работу", "make active", "attiva"), 11.5f, if (solo) cPlay else cDim).apply {
                 background = if (solo) rounded(cAccSoft, 8) else bordered(8)
                 setPadding(dp(8), dp(4), dp(8), dp(4))
-                contentDescription = tr("добавить канал в работу или убрать из неё", "add the channel to active or remove it")
+                contentDescription = tr("добавить канал в работу или убрать из неё", "add the channel to active or remove it", "aggiungi o rimuovi il canale dagli attivi")
                 setOnClickListener {
                     val svc = BridgeService.instance
                     if (svc != null && BridgeService.running) svc.togglePicked(e.sid)
@@ -1903,12 +1903,12 @@ class MainActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams(MATCH_PARENT, 1))
         }
         if (!sheetShowAll && list.size > 8) {
-            sheetList.addView(tv(tr("ещё ${list.size - 8}…", "${list.size - 8} more…"), 12.5f, cDim).apply {
+            sheetList.addView(tv(tr("ещё ${list.size - 8}…", "${list.size - 8} more…", "altri ${list.size - 8}…"), 12.5f, cDim).apply {
                 setPadding(dp(4), dp(11), dp(4), dp(6))
                 setOnClickListener { sheetShowAll = true; rebuildSheet() }
             })
         }
-        val allRow = tv(tr("слышать все каналы · сбросить выбор", "hear all channels · reset choice"), 12.5f, cDim).apply {
+        val allRow = tv(tr("слышать все каналы · сбросить выбор", "hear all channels · reset choice", "ascolta tutti i canali · azzera la selezione"), 12.5f, cDim).apply {
             setPadding(dp(4), dp(12), dp(4), dp(6))
             setOnClickListener {
                 exitSolo()
@@ -1918,9 +1918,9 @@ class MainActivity : AppCompatActivity() {
         }
         sheetList.addView(allRow)
         sheetList.addView(tv(
-            tr("«в работу» — кого слышу (можно несколько каналов)\n", "“active” — whom I hear (several channels allowed)\n") +
-                tr("тап по строке — только посмотреть ленту, адресат не меняется\n", "tap a row — just view its feed, the target stays\n") +
-                tr("«ответить» — говорить ЭТОМУ каналу · долгий тап — убрать из списка", "“reply” — talk to THIS channel · long press — remove from list"),
+            tr("«в работу» — кого слышу (можно несколько каналов)\n", "“active” — whom I hear (several channels allowed)\n", "“attivo” — quali canali ascoltare (anche più di uno)\n") +
+                tr("тап по строке — только посмотреть ленту, адресат не меняется\n", "tap a row — just view its feed, the target stays\n", "tocca una riga per leggere la chat: il destinatario non cambia\n") +
+                tr("«ответить» — говорить ЭТОМУ каналу · долгий тап — убрать из списка", "“reply” — talk to THIS channel · long press — remove from list", "“rispondi” — parla a QUESTO canale · tieni premuto per rimuoverlo"),
             9.5f, cFaint
         ).apply {
             setPadding(dp(4), dp(4), dp(4), 0)
@@ -2096,10 +2096,10 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(6), 0, 0)
         }
-        btns.addView(tv(tr("ответить", "reply"), 11.5f, cDim).apply {
+        btns.addView(tv(tr("ответить", "reply", "rispondi"), 11.5f, cDim).apply {
             background = bordered(8)
             setPadding(dp(8), dp(4), dp(8), dp(4))
-            contentDescription = tr("отвечать в этот канал", "reply to this channel")
+            contentDescription = tr("отвечать в этот канал", "reply to this channel", "rispondi a questo canale")
             setOnClickListener {
                 SessionBook.seen(this@MainActivity, id, name, if (last > 0) last else System.currentTimeMillis())
                 // v1.43: «ответить» — единственный жест смены адресата; лента идёт туда же.
@@ -2161,7 +2161,7 @@ class MainActivity : AppCompatActivity() {
                     hubAllowEditId = ""
                 }
             })
-            row.addView(smallBtn(tr("отмена", "cancel"), cDim) { hubAllowEditId = ""; renderHub() },
+            row.addView(smallBtn(tr("отмена", "cancel", "annulla"), cDim) { hubAllowEditId = ""; renderHub() },
                 LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) })
             card.addView(row)
         }
@@ -2176,7 +2176,7 @@ class MainActivity : AppCompatActivity() {
         val tomorrow = java.util.Date(now.time + 86_400_000L)
         val d = java.util.Date(ts)
         val word = when (day.format(d)) {
-            day.format(now) -> tr("сегодня", "today")
+            day.format(now) -> tr("сегодня", "today", "oggi")
             day.format(tomorrow) -> tr("завтра", "tomorrow")
             else -> java.text.SimpleDateFormat("d MMMM", Lang.locale).format(d)
         }
@@ -2338,7 +2338,7 @@ class MainActivity : AppCompatActivity() {
                 sendHubCommand(JSONObject().put("cmd", "channel.delete").put("id", id),
                     "channel.delete", id, tr("удаляю канал «$name»", "deleting channel “$name”"))
             }
-            .setNegativeButton(tr("отмена", "cancel"), null)
+            .setNegativeButton(tr("отмена", "cancel", "annulla"), null)
             .show()
     }
 
@@ -2393,7 +2393,7 @@ class MainActivity : AppCompatActivity() {
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 main.post {
-                    if (hubReq == req) { hubReqError = tr("нет связи", "offline"); renderHub() }
+                    if (hubReq == req) { hubReqError = tr("нет связи", "offline", "non connesso"); renderHub() }
                     LogBus.add(tr("команда хабу не ушла: ${e.javaClass.simpleName}", "hub command not sent: ${e.javaClass.simpleName}"))
                 }
             }
@@ -2643,7 +2643,7 @@ class MainActivity : AppCompatActivity() {
                     card.addView(pe, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
                     card.addView(ee, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
                     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(6), 0, 0) }
-                    row.addView(smallBtn(tr("сохранить", "save"), cPlay) {
+                    row.addView(smallBtn(tr("сохранить", "save", "salva"), cPlay) {
                         if (hubBusy()) return@smallBtn
                         val pr = pe.text.toString().trim().replace(",", ".").toDoubleOrNull()
                         val en = ee.text.toString().trim()
@@ -2663,7 +2663,7 @@ class MainActivity : AppCompatActivity() {
                             pe.setText(""); ee.setText("")
                         }
                     })
-                    row.addView(smallBtn(tr("отмена", "cancel"), cDim) { planEditSub = ""; renderHub() },
+                    row.addView(smallBtn(tr("отмена", "cancel", "annulla"), cDim) { planEditSub = ""; renderHub() },
                         LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) })
                     card.addView(row)
                 } else card.addView(smallBtn(tr("цена и срок", "price and term"), cDim) {
@@ -2680,7 +2680,7 @@ class MainActivity : AppCompatActivity() {
         }
         // объём работы: линейка, не счёт
         val vol = m.optJSONObject("volume")
-        for ((key, title) in listOf("today" to tr("сегодня", "today"), "week" to tr("7 дней", "7 days"))) {
+        for ((key, title) in listOf("today" to tr("сегодня", "today", "oggi"), "week" to tr("7 дней", "7 days"))) {
             val v = vol?.optJSONObject(key) ?: continue
             sheetList.addView(tv(tr("объём работы · $title", "work volume · $title"), 11f, cDim, bold = true).apply { setPadding(dp(2), dp(8), 0, dp(4)) })
             var sum = 0.0
@@ -2837,7 +2837,7 @@ class MainActivity : AppCompatActivity() {
                                 (if (account.isNotEmpty()) " ($account)" else "") + ".\n" +
                                 tr("Новый вход заменит этот: все задачи хаба пойдут через другой аккаунт.", "A new login replaces this one: all hub tasks will go through the other account."))
                             .setPositiveButton(tr("сменить", "switch")) { _, _ -> start() }
-                            .setNegativeButton(tr("отмена", "cancel"), null)
+                            .setNegativeButton(tr("отмена", "cancel", "annulla"), null)
                             .show()
                     }) else row.addView(smallBtn(tr("войти", "sign in"), cPlay) { start() })
                 }
@@ -3012,7 +3012,7 @@ class MainActivity : AppCompatActivity() {
                 10.5f, if (lim.isNaN()) red else cFaint).apply { setPadding(0, dp(3), 0, 0) })
         }
         subs[prov]?.let { sub ->
-            for ((key, t) in listOf("today" to tr("сегодня", "today"), "week" to tr("7 дней", "7 days"))) {
+            for ((key, t) in listOf("today" to tr("сегодня", "today", "oggi"), "week" to tr("7 дней", "7 days"))) {
                 val c = sub.optJSONObject(key) ?: continue
                 val tok = c.optLong("tokens", 0L)
                 val cost = c.optDouble("cost_usd", 0.0)
@@ -3029,7 +3029,7 @@ class MainActivity : AppCompatActivity() {
             hubKeyProvider = if (hubKeyProvider == prov) "" else prov
             hubKeyReplace = connected
             renderHub()
-        }) else if (!connected) btns.addView(smallBtn(tr("подключить", "connect"), cPlay) { confirmFreeProvider(prov, label, freeList) })
+        }) else if (!connected) btns.addView(smallBtn(tr("подключить", "connect", "collega"), cPlay) { confirmFreeProvider(prov, label, freeList) })
         if (connected) btns.addView(smallBtn(tr("отключить", "disconnect"), red) {
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setMessage(tr("отключить $label?\nхаб сотрёт ключ у себя; у поставщика ключ останется — отзови его там.", "disconnect $label?\nthe hub will erase the key on its side; the key stays valid at the provider — revoke it there."))
@@ -3037,7 +3037,7 @@ class MainActivity : AppCompatActivity() {
                     sendHubCommand(JSONObject().put("cmd", "key.delete").put("provider", prov),
                         "key.delete", prov, tr("отключаю $label", "disconnecting $label"))
                 }
-                .setNegativeButton(tr("отмена", "cancel"), null)
+                .setNegativeButton(tr("отмена", "cancel", "annulla"), null)
                 .show()
         }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) })
         card.addView(btns)
@@ -3129,7 +3129,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(tr("Ключ $label тратит твои деньги: каждая задача хаба списывается с баланса.\n", "Key $label spends your money: every hub task is charged to the balance.\n") +
                 tr("Лимит трат у поставщика поставлен?", "Is a spending limit set at the provider?") +
                 (if (replace) tr("\nСтарый ключ хаб заменит этим.", "\nThe hub will replace the old key with this one.") else ""))
-            .setPositiveButton(tr("подключить", "connect")) { _, _ ->
+            .setPositiveButton(tr("подключить", "connect", "collega")) { _, _ ->
                 if (hubBusy()) return@setPositiveButton
                 val body = JSONObject().put("provider", prov).put("key", key)
                 if (replace) body.put("replace", true)
@@ -3138,7 +3138,7 @@ class MainActivity : AppCompatActivity() {
                 hubKeyProvider = ""
                 sent()
             }
-            .setNegativeButton(tr("отмена", "cancel"), null)
+            .setNegativeButton(tr("отмена", "cancel", "annulla"), null)
             .show()
     }
 
@@ -3146,11 +3146,11 @@ class MainActivity : AppCompatActivity() {
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setMessage(tr("$label: бесплатные модели учатся на коде, который им отправляют.\n", "$label: free models learn from the code sent to them.\n") +
                 tr("Хаб даст им только проекты: ${freeList.ifEmpty { "—" }}. Подключить?", "The hub will give them only these projects: ${freeList.ifEmpty { "—" }}. Connect?"))
-            .setPositiveButton(tr("подключить", "connect")) { _, _ ->
+            .setPositiveButton(tr("подключить", "connect", "collega")) { _, _ ->
                 sendHubCommand(JSONObject().put("cmd", "provider.add").put("provider", prov),
                     "provider.add", prov, tr("подключаю $label", "connecting $label"), waitMs = 180000L)
             }
-            .setNegativeButton(tr("отмена", "cancel"), null)
+            .setNegativeButton(tr("отмена", "cancel", "annulla"), null)
             .show()
     }
 
@@ -3340,7 +3340,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val worker = role != "classifier" && role != "helper"
-        for ((key, title) in listOf("today" to tr("сегодня", "today"), "week" to tr("7 дней", "7 days"))) {
+        for ((key, title) in listOf("today" to tr("сегодня", "today", "oggi"), "week" to tr("7 дней", "7 days"))) {
             val c = a.optJSONObject(key) ?: continue
             card.addView(tv("$title: " + countsLine(c, redo = true, spend = worker), 10.5f, cFaint).apply {
                 setPadding(0, dp(3), 0, 0)
@@ -3400,7 +3400,7 @@ class MainActivity : AppCompatActivity() {
             val names = (0 until ag.length()).map { labels[ag.optString(it)] ?: ag.optString(it) }
             card.addView(tv(names.joinToString(", "), 11f, cDim).apply { setPadding(0, dp(3), 0, 0) })
         }
-        for ((key, t) in listOf("today" to tr("сегодня", "today"), "week" to tr("7 дней", "7 days"))) {
+        for ((key, t) in listOf("today" to tr("сегодня", "today", "oggi"), "week" to tr("7 дней", "7 days"))) {
             val c = s.optJSONObject(key) ?: continue
             card.addView(tv("$t: " + countsLine(c, redo = false, spend = true), 10.5f, cFaint).apply {
                 setPadding(0, dp(3), 0, 0)
@@ -3468,26 +3468,26 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(10), dp(16), dp(24))
         }
-        col.addView(tv(tr("‹ настройки", "‹ settings"), 15f, cDim, bold = true).apply {
+        col.addView(tv(tr("‹ настройки", "‹ settings", "‹ impostazioni"), 15f, cDim, bold = true).apply {
             setPadding(0, dp(6), 0, dp(12))
             setOnClickListener { settingsOverlay.visibility = View.GONE }
         })
 
         // v1.04 (слово юзера: «надел наушники — работаю в них, снял дома — с телефона»)
-        col.addView(switchRow(tr("сам следовать за наушниками", "follow the headphones automatically"),
-            tr("надел — звук в них, снял — вслух; ничего не переключать руками", "put them on — sound goes there, take them off — it plays aloud; no manual switching"),
+        col.addView(switchRow(tr("сам следовать за наушниками", "follow the headphones automatically", "segui automaticamente gli auricolari"),
+            tr("надел — звук в них, снял — вслух; ничего не переключать руками", "put them on — sound goes there, take them off — it plays aloud; no manual switching", "con gli auricolari collegati, l'audio passa da lì; scollegandoli, passa all'altoparlante"),
             { Cfg.autoRoute }, { Cfg.autoRoute = it }))
         col.addView(divider(), LinearLayout.LayoutParams(MATCH_PARENT, 1))
-        col.addView(switchRow(tr("только в наушниках", "headphones only"), tr("если авто-режим выключен: без наушников ответы ждут", "if auto mode is off: without headphones, replies wait"),
+        col.addView(switchRow(tr("только в наушниках", "headphones only", "solo auricolari"), tr("если авто-режим выключен: без наушников ответы ждут", "if auto mode is off: without headphones, replies wait", "senza modalità automatica: se mancano gli auricolari, le risposte aspettano"),
             { Cfg.onlyHeadset }, { Cfg.onlyHeadset = it }))
         col.addView(divider(), LinearLayout.LayoutParams(MATCH_PARENT, 1))
-        col.addView(switchRow(tr("называть канал перед ответом", "announce the channel before a reply"), null,
+        col.addView(switchRow(tr("называть канал перед ответом", "announce the channel before a reply", "annuncia il canale prima della risposta"), null,
             { Cfg.announceProj }, { Cfg.announceProj = it }))
         col.addView(divider(), LinearLayout.LayoutParams(MATCH_PARENT, 1))
-        col.addView(switchRow(tr("голосовые подсказки", "voice cues"), tr("«слушаю», «ушло», «связь потеряна»", "“listening”, “sent”, “connection lost”"),
+        col.addView(switchRow(tr("голосовые подсказки", "voice cues", "avvisi vocali"), tr("«слушаю», «ушло», «связь потеряна»", "“listening”, “sent”, “connection lost”", "“in ascolto”, “inviato”, “connessione persa”"),
             { Cfg.voiceCues }, { Cfg.voiceCues = it }))
         col.addView(divider(), LinearLayout.LayoutParams(MATCH_PARENT, 1))
-        col.addView(switchRow(tr("отправка по тишине", "send on silence"), tr("замолчал — ушло само; выкл = только «отправляй» и кнопки", "go quiet — it sends itself; off = only “send” and buttons"),
+        col.addView(switchRow(tr("отправка по тишине", "send on silence", "invia dopo una pausa"), tr("замолчал — ушло само; выкл = только «отправляй» и кнопки", "go quiet — it sends itself; off = only “send” and buttons", "dopo una pausa invia automaticamente; se disattivo, usa “invia” o i pulsanti"),
             { Cfg.autoSend }, { Cfg.autoSend = it }, expose = { autoSendSwitchRef = it }))
         col.addView(divider(), LinearLayout.LayoutParams(MATCH_PARENT, 1))
 
@@ -3496,12 +3496,12 @@ class MainActivity : AppCompatActivity() {
             visibility = View.GONE
             setPadding(dp(6), 0, 0, 0)
         }
-        col.addView(linkRow(tr("для продвинутых", "advanced"), tr("whisper · связь · таймеры · кнопка гарнитуры", "whisper · connection · timers · headset button")) {
+        col.addView(linkRow(tr("для продвинутых", "advanced", "avanzate"), tr("whisper · связь · таймеры · кнопка гарнитуры", "whisper · connection · timers · headset button", "Whisper · connessione · tempi · pulsante auricolari")) {
             advBox.visibility = if (advBox.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         })
         col.addView(advBox)
         col.addView(divider(), LinearLayout.LayoutParams(MATCH_PARENT, 1))
-        col.addView(linkRow(tr("отладка", "debug"), tr("журнал и диагностика — всё, что видим мы", "log and diagnostics — everything we see")) {
+        col.addView(linkRow(tr("отладка", "debug", "diagnostica"), tr("журнал и диагностика — всё, что видим мы", "log and diagnostics — everything we see", "registro degli eventi e diagnostica")) {
             debugOverlay.visibility = View.VISIBLE
             renderLog()
         })
@@ -3536,18 +3536,18 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { onClick() }
         }
 
-        advBox.addView(advLabel(tr("связь с релеем", "relay connection")))
-        advBox.addView(tv(tr("релей — твой сервер-мост. проще всего: ссылка-настройка или «адрес|токен|отпечаток» из буфера", "the relay is your bridge server. easiest: a setup link or “address|token|fingerprint” from the clipboard"), 10f, cFaint))
+        advBox.addView(advLabel(tr("связь с релеем", "relay connection", "connessione al relay")))
+        advBox.addView(tv(tr("релей — твой сервер-мост. проще всего: ссылка-настройка или «адрес|токен|отпечаток» из буфера", "the relay is your bridge server. easiest: a setup link or “address|token|fingerprint” from the clipboard", "il relay collega telefono e computer. Usa il link di configurazione o incolla “indirizzo|token|impronta”"), 10f, cFaint))
         urlEdit = EditText(this).apply {
-            setText(Cfg.url); hint = tr("https://адрес:порт", "https://address:port")
+            setText(Cfg.url); hint = tr("https://адрес:порт", "https://address:port", "https://indirizzo:porta")
             inputType = InputType.TYPE_TEXT_VARIATION_URI
         }
         tokenEdit = EditText(this).apply {
-            setText(Cfg.token); hint = tr("токен релея", "relay token")
+            setText(Cfg.token); hint = tr("токен релея", "relay token", "token del relay")
             inputType = InputType.TYPE_CLASS_TEXT
         }
         pinEdit = EditText(this).apply {
-            setText(Cfg.pin); hint = tr("SHA-256 отпечаток сертификата", "SHA-256 certificate fingerprint")
+            setText(Cfg.pin); hint = tr("SHA-256 отпечаток сертификата", "SHA-256 certificate fingerprint", "impronta SHA-256 del certificato")
             inputType = InputType.TYPE_CLASS_TEXT
         }
         for (e in listOf(urlEdit, tokenEdit, pinEdit)) {
@@ -3556,22 +3556,22 @@ class MainActivity : AppCompatActivity() {
             e.backgroundTintList = android.content.res.ColorStateList.valueOf(cDim)
             advBox.addView(e)
         }
-        advBox.addView(advBtn(tr("вставить конфиг из буфера", "paste config from clipboard")) { pasteConfig() },
+        advBox.addView(advBtn(tr("вставить конфиг из буфера", "paste config from clipboard", "incolla configurazione")) { pasteConfig() },
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
-        advBox.addView(advBtn(tr("сохранить и перезапустить", "save and restart")) {
+        advBox.addView(advBtn(tr("сохранить и перезапустить", "save and restart", "salva e riavvia")) {
             saveFields()
-            if (BridgeService.running) restartService() else LogBus.add(tr("настройки сохранены", "settings saved"))
+            if (BridgeService.running) restartService() else LogBus.add(tr("настройки сохранены", "settings saved", "impostazioni salvate"))
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
-        advBox.addView(advBtn(tr("тест связи", "test connection")) { testRelay() },
+        advBox.addView(advBtn(tr("тест связи", "test connection", "verifica connessione")) { testRelay() },
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
 
-        advBox.addView(advLabel(tr("режимы", "modes")))
-        advBox.addView(switchRow(tr("безрукий режим", "hands-free mode"), tr("микрофон всегда включён, отправка словом", "mic always on, send by voice word"),
+        advBox.addView(advLabel(tr("режимы", "modes", "modalità")))
+        advBox.addView(switchRow(tr("безрукий режим", "hands-free mode", "modalità a mani libere"), tr("микрофон всегда включён, отправка словом", "mic always on, send by voice word", "microfono sempre attivo, invio con comando vocale"),
             { Cfg.handsFree }, { on ->
                 Cfg.handsFree = on
                 BridgeService.instance?.let { s -> if (on) s.startListening() else s.stopListening() }
             }))
-        advBox.addView(switchRow(tr("распознавание whisper", "whisper recognition"), tr("на твоём сервере; лучше в шуме, нужен whisper-бэкенд", "on your server; better in noise, needs a whisper backend"),
+        advBox.addView(switchRow(tr("распознавание whisper", "whisper recognition", "riconoscimento Whisper"), tr("на твоём сервере; лучше в шуме, нужен whisper-бэкенд", "on your server; better in noise, needs a whisper backend", "sul tuo server; richiede Whisper installato"),
             { Cfg.whisper }, { on ->
                 Cfg.whisper = on
                 BridgeService.instance?.let { s ->
@@ -3581,30 +3581,30 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }))
-        advBox.addView(switchRow(tr("разговорный источник записи", "voice-call recording source"), tr("выкл = «распознавание»: проверка кнопки гарнитуры", "off = “recognition”: headset button check"),
+        advBox.addView(switchRow(tr("разговорный источник записи", "voice-call recording source", "registrazione in modalità chiamata"), tr("выкл = «распознавание»: проверка кнопки гарнитуры", "off = “recognition”: headset button check", "se disattiva usa la modalità riconoscimento; utile per verificare il pulsante degli auricolari"),
             { Cfg.micVoiceComm }, { on ->
                 Cfg.micVoiceComm = on
                 LogBus.add(tr("источник записи: ", "recording source: ") + (if (on) tr("разговорный", "voice call") else tr("распознавание", "recognition")) +
                     tr(" — со следующей диктовки", " — from the next dictation"))
             }))
-        advBox.addView(switchRow(tr("кнопка гарнитуры с первого нажатия", "headset button from the first press"), tr("по следу обрыва канала (без whisper)", "by the channel drop trace (no whisper)"),
+        advBox.addView(switchRow(tr("кнопка гарнитуры с первого нажатия", "headset button from the first press", "pulsante auricolari al primo tocco"), tr("по следу обрыва канала (без whisper)", "by the channel drop trace (no whisper)", "usa le interruzioni del canale audio (senza Whisper)"),
             { Cfg.routeAsButton }, { on ->
                 Cfg.routeAsButton = on
                 LogBus.add(if (on) tr("кнопка: ловлю первое нажатие по обрыву канала", "button: catching the first press by the channel drop")
                     else tr("кнопка: как раньше — отправит второе нажатие", "button: as before — the second press sends"))
             }))
-        advBox.addView(switchRow(tr("догонять пропущенное", "catch up on missed"), tr("при подключении — за последние 30 мин", "on connect — the last 30 min"),
+        advBox.addView(switchRow(tr("догонять пропущенное", "catch up on missed", "recupera le risposte perse"), tr("при подключении — за последние 30 мин", "on connect — the last 30 min", "alla riconnessione, recupera gli ultimi 30 minuti"),
             { Cfg.catchup }, { Cfg.catchup = it }))
 
-        advBox.addView(advLabel(tr("прочее", "other")))
-        advBox.addView(advBtn(tr("разрешить работу в фоне (батарея)", "allow background work (battery)")) {
+        advBox.addView(advLabel(tr("прочее", "other", "altro")))
+        advBox.addView(advBtn(tr("разрешить работу в фоне (батарея)", "allow background work (battery)", "consenti attività in background (batteria)")) {
             try {
                 val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
                 if (pm.isIgnoringBatteryOptimizations(packageName)) {
-                    LogBus.add(tr("фоновая работа уже разрешена", "background work is already allowed"))
+                    LogBus.add(tr("фоновая работа уже разрешена", "background work is already allowed", "l'attività in background è già consentita"))
                 } else if (BuildConfig.FLAVOR == "store") {
                     startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                    LogBus.add(tr("найди это приложение в списке и разреши работу в фоне", "find this app in the list and allow background work"))
+                    LogBus.add(tr("найди это приложение в списке и разреши работу в фоне", "find this app in the list and allow background work", "trova ClAudio Codice nell'elenco e consenti l'attività in background"))
                 } else {
                     startActivity(
                         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
@@ -3612,7 +3612,7 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
             } catch (e: Exception) {
-                LogBus.add(tr("не открылось: ${e.message}", "could not open: ${e.message}"))
+                LogBus.add(tr("не открылось: ${e.message}", "could not open: ${e.message}", "impossibile aprire: ${e.message}"))
             }
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
         serviceBtn = advBtn("") {
@@ -3622,7 +3622,7 @@ class MainActivity : AppCompatActivity() {
         }
         refreshServiceBtn()
         advBox.addView(serviceBtn, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
-        advBox.addView(advBtn(tr("показать первый запуск", "show first launch")) {
+        advBox.addView(advBtn(tr("показать первый запуск", "show first launch", "mostra configurazione iniziale")) {
             settingsOverlay.visibility = View.GONE
             onboardOverlay.visibility = View.VISIBLE
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
@@ -3630,7 +3630,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshServiceBtn() {
         if (::serviceBtn.isInitialized)
-            serviceBtn.text = if (BridgeService.running) tr("остановить сервис", "stop service") else tr("запустить сервис", "start service")
+            serviceBtn.text = if (BridgeService.running) tr("остановить сервис", "stop service", "arresta servizio") else tr("запустить сервис", "start service", "avvia servizio")
     }
 
     private fun restartService() {
@@ -3651,7 +3651,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(10), dp(16), dp(24))
         }
-        col.addView(tv(tr("‹ отладка", "‹ debug"), 15f, cDim, bold = true).apply {
+        col.addView(tv(tr("‹ отладка", "‹ debug", "‹ diagnostica"), 15f, cDim, bold = true).apply {
             setPadding(0, dp(6), 0, dp(10))
             setOnClickListener { debugOverlay.visibility = View.GONE }
         })
@@ -3660,7 +3660,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(10), dp(8), dp(10), dp(8))
         }
         col.addView(debugTech)
-        col.addView(tv(tr("журнал (свежее сверху)", "log (newest first)"), 10.5f, cFaint).apply { setPadding(0, dp(12), 0, dp(4)) })
+        col.addView(tv(tr("журнал (свежее сверху)", "log (newest first)", "registro (più recenti in alto)"), 10.5f, cFaint).apply { setPadding(0, dp(12), 0, dp(4)) })
         logView = tv("", 11f, cDim)
         val logScroll = ScrollView(this).apply { addView(logView, MATCH_PARENT, WRAP_CONTENT) }
         col.addView(logScroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
@@ -3683,8 +3683,8 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(24))
         }
-        col.addView(tv(tr("первый запуск", "first launch"), 17f, cText, bold = true))
-        col.addView(tv(tr("рация говорит с ТВОИМ сервером — общего облака нет", "the radio talks to YOUR server — there is no shared cloud"), 11f, cDim).apply {
+        col.addView(tv(tr("первый запуск", "first launch", "configurazione iniziale"), 17f, cText, bold = true))
+        col.addView(tv(tr("рация говорит с ТВОИМ сервером — общего облака нет", "the radio talks to YOUR server — there is no shared cloud", "ClAudio Codice si collega al TUO server relay"), 11f, cDim).apply {
             setPadding(0, dp(4), 0, dp(12))
         })
 
@@ -3707,42 +3707,42 @@ class MainActivity : AppCompatActivity() {
             return card
         }
         val gap = { h: Int -> LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(h) } }
-        col.addView(step(tr("шаг 1 · сервер", "step 1 · server"),
-            tr("запусти на своём сервере одну команду — она поставит мост и напечатает ссылку-настройку и QR-код.", "run one command on your server — it installs the bridge and prints a setup link and QR code."),
+        col.addView(step(tr("шаг 1 · сервер", "step 1 · server", "passo 1 · server"),
+            tr("запусти на своём сервере одну команду — она поставит мост и напечатает ссылку-настройку и QR-код.", "run one command on your server — it installs the bridge and prints a setup link and QR code.", "esegui lo script sul server: installa il relay e genera il link di configurazione e il QR."),
             "bash install-relay.sh"), gap(0))
-        col.addView(step(tr("шаг 2 · телефон", "step 2 · phone"),
-            tr("отсканируй QR камерой (или открой ссылку claudio://…) — адрес, ключ и отпечаток встанут сами. печатать ничего не надо.", "scan the QR with the camera (or open the claudio://… link) — address, key and fingerprint fill in by themselves. no typing needed."),
+        col.addView(step(tr("шаг 2 · телефон", "step 2 · phone", "passo 2 · telefono"),
+            tr("отсканируй QR камерой (или открой ссылку claudio-codice://…) — адрес, ключ и отпечаток встанут сами. печатать ничего не надо.", "scan the QR with the camera (or open the claudio-codice://… link) — address, key and fingerprint fill in by themselves. no typing needed.", "scansiona il QR o apri il link claudio-codice://…: indirizzo, token e impronta vengono compilati automaticamente."),
             null), gap(10))
-        col.addView(step(tr("шаг 3 · проверка", "step 3 · check"),
-            tr("нажми круг и скажи «привет». ответ прозвучит в наушнике.", "press the circle and say “hello”. the reply will play in your earphone."),
+        col.addView(step(tr("шаг 3 · проверка", "step 3 · check", "passo 3 · verifica"),
+            tr("нажми круг и скажи «привет». ответ прозвучит в наушнике.", "press the circle and say “hello”. the reply will play in your earphone.", "con una sessione collegata, tocca il cerchio e di' “ciao”. Ascolterai la risposta negli auricolari."),
             null), gap(10))
 
-        col.addView(tv(tr("если ссылки нет — вставь конфиг вручную:", "if there is no link — paste the config by hand:"), 10.5f, cFaint).apply {
+        col.addView(tv(tr("если ссылки нет — вставь конфиг вручную:", "if there is no link — paste the config by hand:", "senza link, incolla la configurazione:"), 10.5f, cFaint).apply {
             setPadding(dp(2), dp(14), 0, dp(4))
         })
         col.addView(Button(this).apply {
-            text = tr("вставить из буфера (адрес|токен|пин)", "paste from clipboard (address|token|pin)")
+            text = tr("вставить из буфера (адрес|токен|пин)", "paste from clipboard (address|token|pin)", "incolla (indirizzo|token|impronta)")
             textSize = 13f; isAllCaps = false
             typeface = Typeface.MONOSPACE
             setTextColor(cText); background = rounded(cCard, 10); stateListAnimator = null
             setOnClickListener { pasteConfig() }
         })
         col.addView(Button(this).apply {
-            text = tr("начать разговор", "start talking")
+            text = tr("начать разговор", "start talking", "inizia a parlare")
             textSize = 15f; isAllCaps = false
             typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             setTextColor(cBg); background = rounded(cPlay, 14); stateListAnimator = null
             setPadding(dp(10), dp(14), dp(10), dp(14))
             setOnClickListener {
                 if (Cfg.token.isEmpty()) {
-                    LogBus.add(tr("сначала настрой релей — шаги выше", "set up the relay first — steps above"))
+                    LogBus.add(tr("сначала настрой релей — шаги выше", "set up the relay first — steps above", "configura prima il relay seguendo i passi sopra"))
                 } else {
                     onboardOverlay.visibility = View.GONE
                     ensureService { it.talkNow() }
                 }
             }
         }, gap(12))
-        col.addView(tv(tr("настрою позже — просто посмотреть", "I'll set up later — just look around"), 11f, cFaint).apply {
+        col.addView(tv(tr("настрою позже — просто посмотреть", "I'll set up later — just look around", "configura più tardi — esplora l'app"), 11f, cFaint).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(12), 0, 0)
             setOnClickListener { onboardOverlay.visibility = View.GONE }
@@ -3772,16 +3772,16 @@ class MainActivity : AppCompatActivity() {
         try {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val txt = cm.primaryClip?.getItemAt(0)?.text?.toString()?.trim().orEmpty()
-            if (txt.isEmpty()) { LogBus.add(tr("буфер пуст", "clipboard is empty")); return }
+            if (txt.isEmpty()) { LogBus.add(tr("буфер пуст", "clipboard is empty", "gli appunti sono vuoti")); return }
             if (txt.startsWith("{")) {
                 val o = JSONObject(txt)
                 if (o.has("url")) urlEdit.setText(o.getString("url"))
                 if (o.has("token")) tokenEdit.setText(o.getString("token"))
                 if (o.has("pin")) pinEdit.setText(o.getString("pin"))
-            } else if (txt.startsWith("claudio://")) {
+            } else if (txt.startsWith("claudio-codice://")) {
                 val uu = Uri.parse(txt)
                 if (!"setup".equals(uu.host, true)) {
-                    LogBus.add(tr("не разобрал ссылку — нужен вид claudio://setup?url=…&token=…", "couldn't parse the link — it must look like claudio://setup?url=…&token=…"))
+                    LogBus.add(tr("не разобрал ссылку — нужен вид claudio-codice://setup?url=…&token=…", "couldn't parse the link — it must look like claudio-codice://setup?url=…&token=…", "link non valido — usa claudio-codice://setup?url=…&token=…"))
                     return
                 }
                 handleDeepLink(Intent(Intent.ACTION_VIEW, uu))
@@ -3794,10 +3794,10 @@ class MainActivity : AppCompatActivity() {
                     }
                     p.size == 2 -> {
                         urlEdit.setText(p[0].trim()); tokenEdit.setText(p[1].trim())
-                        LogBus.add(tr("пин не найден в строке — впиши отпечаток сертификата вручную", "pin not found in the string — enter the certificate fingerprint by hand"))
+                        LogBus.add(tr("пин не найден в строке — впиши отпечаток сертификата вручную", "pin not found in the string — enter the certificate fingerprint by hand", "impronta non trovata — inserisci manualmente l'impronta del certificato"))
                     }
                     else -> {
-                        LogBus.add(tr("не разобрал строку — нужен формат адрес|токен|пин", "couldn't parse the string — format must be address|token|pin"))
+                        LogBus.add(tr("не разобрал строку — нужен формат адрес|токен|пин", "couldn't parse the string — format must be address|token|pin", "formato non valido — usa indirizzo|token|impronta"))
                         return
                     }
                 }
@@ -3805,10 +3805,10 @@ class MainActivity : AppCompatActivity() {
                 tokenEdit.setText(txt)
             }
             saveFields()
-            LogBus.add(tr("конфиг вставлен и сохранён", "config pasted and saved"))
+            LogBus.add(tr("конфиг вставлен и сохранён", "config pasted and saved", "configurazione incollata e salvata"))
             if (Cfg.token.isNotEmpty()) onboardOverlay.visibility = View.GONE
         } catch (e: Exception) {
-            LogBus.add(tr("не разобрал буфер: ${e.message}", "couldn't parse the clipboard: ${e.message}"))
+            LogBus.add(tr("не разобрал буфер: ${e.message}", "couldn't parse the clipboard: ${e.message}", "impossibile leggere la configurazione: ${e.message}"))
         }
     }
 
@@ -3825,22 +3825,22 @@ class MainActivity : AppCompatActivity() {
     private fun testRelay() {
         if (::urlEdit.isInitialized) saveFields()   // тест идёт на то, что в полях, как раньше
         val client = try { Net.client(Cfg.pin) } catch (e: Exception) {
-            LogBus.add(tr("кривой пин: ${e.message}", "bad pin: ${e.message}")); return
+            LogBus.add(tr("кривой пин: ${e.message}", "bad pin: ${e.message}", "impronta non valida: ${e.message}")); return
         }
         val req = try {
             Request.Builder().url("${Cfg.url}/status?token=${Cfg.token}").build()
         } catch (e: Exception) {
-            LogBus.add(tr("кривой адрес: ${e.message}", "bad address: ${e.message}")); return
+            LogBus.add(tr("кривой адрес: ${e.message}", "bad address: ${e.message}", "indirizzo non valido: ${e.message}")); return
         }
-        LogBus.add(tr("проверяю ${Cfg.url} …", "checking ${Cfg.url} …"))
+        LogBus.add(tr("проверяю ${Cfg.url} …", "checking ${Cfg.url} …", "verifica di ${Cfg.url} …"))
         client.newCall(req).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                main.post { LogBus.add(tr("НЕТ СВЯЗИ: ${e.message}", "NO CONNECTION: ${e.message}")) }
+                main.post { LogBus.add(tr("НЕТ СВЯЗИ: ${e.message}", "NO CONNECTION: ${e.message}", "NESSUNA CONNESSIONE: ${e.message}")) }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string()?.take(200)
-                main.post { LogBus.add(tr("релей ответил: $body", "relay replied: $body")) }
+                main.post { LogBus.add(tr("релей ответил: $body", "relay replied: $body", "risposta del relay: $body")) }
             }
         })
     }

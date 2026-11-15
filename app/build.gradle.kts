@@ -23,15 +23,15 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.vladiko.voicebridge"
+        applicationId = "it.claudiocodice.app"
         minSdk = 26
         // 35: Play requirement for new apps since 31.08.2025. NOTE: submissions after
         // 31.08.2026 will need 36 (Android 16) — that needs AGP 8.9+/Gradle 8.11+.
         targetSdk = 35
         // Single source of truth for the version: the app reads BuildConfig.VERSION_NAME.
         // Bump BOTH on every delivered build (Play requires a growing versionCode).
-        versionCode = 148
-        versionName = "1.48"
+        versionCode = 149
+        versionName = "1.48-it.1"
     }
 
     // Two builds from one codebase. "personal" is the owner's build: his relay baked in

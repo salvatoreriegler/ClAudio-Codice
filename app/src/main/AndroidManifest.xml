@@ -15,7 +15,7 @@
          теме давал тёмный текст на тёмном фоне у неперекрашенных виджетов.
          allowBackup=false: токен и пин релея не должны уезжать в облачный бэкап. -->
     <application
-        android:label="Claudio Code"
+        android:label="ClAudio Codice"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.AppCompat.NoActionBar"
@@ -32,12 +32,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <!-- v0.69: ссылка-настройка. Скрипт установки релея печатает
-                 claudio://setup?url=…&token=…&pin=… (и QR) — конфиг встаёт сам. -->
+                 claudio-codice://setup?url=…&token=…&pin=… (и QR) — конфиг встаёт сам. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="claudio" android:host="setup" />
+                <data android:scheme="claudio-codice" android:host="setup" />
             </intent-filter>
         </activity>
 

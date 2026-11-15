@@ -1,11 +1,12 @@
 {
-  "name": "claudio-relay",
+  "name": "claudio-codice-relay",
   "version": "1.0.0",
   "private": true,
-  "description": "Relay for Claudio Code: keeps per-session queues between Claude Code sessions and the phone",
+  "description": "Relay di ClAudio Codice: conversazioni vocali in italiano con Claude Code",
   "main": "relay.js",
   "scripts": {
-    "start": "node relay.js"
+    "start": "node relay.js",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=18"

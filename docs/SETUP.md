@@ -1,72 +1,105 @@
-# Claudio Code — setting up your own relay (SETUP)
+# Installazione di ClAudio Codice
 
-<!-- DRAFT for the public repo (store build, English). -->
+## Relay Linux
 
-There is no shared server: every user runs THEIR OWN bridge. Three parts:
+Installa Node.js 18+, npm, OpenSSL e curl. Copia la cartella `server/` del fork e avvia:
 
+```bash
+cd server
+bash install-relay.sh
 ```
-Claude Code (your computer)                 your server (any VPS)        phone
-Stop hook voices the reply   ── HTTPS ──▶  relay.js (Node, port 8443) ◀── Claudio Code (APK)
-and posts the OGG to the relay             session queues, /utt, WSS      plays replies, sends voice
+
+Lo script genera token e certificato, installa `ws`, avvia e verifica il relay. Stampa un link **claudio-codice://setup?...** e, se `qrencode` è installato, il QR. La porta iniziale è 8443: apri nel firewall quella configurata in `config.json`.
+
+Copia il certificato pubblico `cert.pem` anche sul computer con Claude Code. La chiave privata `key.pem` resta sul server. Il protocollo del relay è compatibile con l'originale; lo schema del link è diverso per distinguere le app.
+
+## Computer con Claude Code
+
+Servono Python, `edge-tts` e `ffmpeg` nel PATH:
+
+```bash
+python -m pip install edge-tts
 ```
 
-## 1. Server (5 minutes)
+Prepara questa struttura nella cartella utente:
 
-Any Linux server with a public IP will do (the cheapest VPS is fine).
+```text
+~/.claude/voice/
+  readback.py              ← desktop/readback.py
+  ON                      ← file vuoto che abilita la lettura
+  bridge/
+    config.json           ← desktop/bridge-config.example.json, completato
+    cert.pem              ← certificato pubblico del server
+```
 
-1. Install Node.js 18+.
-2. Copy `server/relay.js` and `server/install-relay.sh` from this repository into one folder
-   and run:
-   ```bash
-   bash install-relay.sh
-   ```
-   The script generates a token and a certificate, starts the relay and prints a
-   **setup link** (`claudio://setup?...`) and its QR code.
-3. Manual way (if the script does not fit). The relay reads its settings ONLY from
-   `config.json` next to it:
-   ```bash
-   npm install ws
-   openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 3650 -subj "/CN=relay"
-   TOKEN=$(head -c 24 /dev/urandom | base64 | tr -d '+/=')
-   printf '{ "token": "%s", "port": 8443, "tlsKey": "key.pem", "tlsCert": "cert.pem", "keepAudio": 100 }\n' "$TOKEN" > config.json
-   openssl x509 -in cert.pem -outform DER | sha256sum | awk '{print $1}'   # PIN — hex only, without " -"
-   ```
-   and start the relay (pm2 is best): `node relay.js`.
-   Port 8443 is only an example — any free port works; open the same port in your firewall
-   and use it in the app's address.
+Esempio di `bridge/config.json`:
 
-## 2. Computer with Claude Code (10 minutes)
+```json
+{
+  "url": "https://IL-TUO-SERVER:8443",
+  "token": "IL-TUO-TOKEN",
+  "cacert": "cert.pem",
+  "voice": "it-IT-DiegoNeural"
+}
+```
 
-1. Copy `desktop/readback.py` to `~/.claude/voice/` and fill in `config.json` (relay address,
-   token).
-2. Register it as a Stop hook in `~/.claude/settings.json` — every session reply will be voiced
-   (edge-tts + ffmpeg) and sent to the relay.
-3. In a session, start the inbox poller (the voice-bridge skill from the repository).
+Registra `readback.py` come hook **Stop** nelle impostazioni di Claude Code, usando i percorsi assoluti del tuo Python e dello script. Esempio da integrare in `~/.claude/settings.json`, preservando gli hook esistenti:
 
-<!-- TODO before publishing: readback.py must use an English edge-tts voice for public users. -->
+Riferimento: [documentazione ufficiale degli hook di Claude Code](https://code.claude.com/docs/en/hooks).
 
-## 3. Phone (1 minute)
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "python /PERCORSO/ASSOLUTO/.claude/voice/readback.py"
+      }]
+    }]
+  }
+}
+```
 
-1. Install the app.
-2. Scan the QR code from your server with the camera (or open the `claudio://setup?...` link) —
-   address, token and fingerprint are set automatically.
-   Fallback: settings → "advanced" → paste one line `address|token|pin` (or JSON).
-3. Tap the circle and say "hello". Done.
+Su Windows, quota i percorsi con spazi e usa la corretta sintassi JSON per le barre inverse.
+Copia `desktop/skill/voice-bridge/` in `~/.claude/skills/voice-bridge/` e invoca **/voice-bridge** in ogni sessione che vuoi usare. La skill eredita il monitor in background dell'upstream e descrive un'alternativa tramite Bash. La compatibilità va verificata con la versione di Claude Code installata.
 
-## Whisper (optional, advanced)
+Il nome della cartella di lavoro o il titolo personalizzato della sessione identifica il canale. Chiedi alla sessione di rispondere in italiano.
 
-By default recognition uses Android's own recognizer. If you want server-side recognition
-(better in noise), install whisper.cpp and `transcribe.js` from the repository on your server,
-then turn on the Whisper switch in the app's "advanced" section.
+## Telefono
 
-Recognition language is set by the `WHISPER_LANG` environment variable of `transcribe.js`
-(passed to whisper.cpp as `-l`):
+Installa l'APK di sviluppo **ClAudio Codice**. Scansiona il QR o apri il nuovo link; controlla il server nella conferma. In alternativa incolla `indirizzo|token|impronta` in **impostazioni → avanzate**.
 
-- `auto` (default) — whisper detects the language of each recording;
-- `en`, `de`, … — pin one language: more reliable on short phrases and in noise;
-- `ru` — Russian; English voice commands ("send", "cancel") are then switched off on the server.
+Concedi il microfono quando richiesto. Attendi una risposta dalla sessione collegata, poi premi **canali → rispondi**. Per inviare dicendo «invia» con Android, attiva **modalità a mani libere**; il pulsante centrale funziona anche senza.
 
-With pm2: `WHISPER_LANG=en pm2 start transcribe.js --name voice-whisper --update-env`
-(or `env: { WHISPER_LANG: "en" }` in an ecosystem file). Server-side voice commands follow the
-same strict rule as the app: "send" / "send it" / "send please" / "send now" or "cancel" only
-as the last sentence of their own.
+## Whisper facoltativo
+
+La build `store` usa inizialmente Android in italiano. Per Whisper, compila `whisper.cpp` sul server Linux e scarica un modello multilingue, non una variante `.en`. Il servizio ereditato cerca:
+
+```text
+~/whisper.cpp/build/bin/whisper-cli
+~/whisper.cpp/models/ggml-base.bin
+~/voice_bridge/config.json
+~/voice_bridge/utt/
+```
+
+Esegui il relay da `~/voice_bridge/`, copiandovi i file di `server/`, compreso **italian-commands.js**. Da quella cartella:
+
+```bash
+WHISPER_LANG=it COMMAND_LANG=it node transcribe.js
+```
+
+Puoi usare pm2 con le stesse variabili. `WHISPER_LANG` controlla la trascrizione, `COMMAND_LANG` i comandi. Entrambi sono italiani per impostazione predefinita; `WHISPER_LANG=auto` consente rilevamento automatico mantenendo i comandi italiani. Dopo l'avvio attiva **riconoscimento Whisper** nell'app.
+
+## Build e controlli
+
+Con JDK 17, Android SDK 35 e `ANDROID_HOME` configurato:
+
+```powershell
+.\gradlew.bat :app:testStoreDebugUnitTest :app:assembleStoreDebug
+node --test server/test/*.test.js
+```
+
+Su Linux/macOS usa `./gradlew`. Il wrapper scarica Gradle e le dipendenze.
+L'APK è `app/build/outputs/apk/store/debug/app-store-debug.apk`, firmato con chiave di sviluppo. Per una release stabile serve una chiave dedicata, secondo la configurazione `keystore.properties` del progetto.
+
+Le verifiche automatiche non sostituiscono una prova con telefono, auricolari, relay e una sessione Claude Code reali.

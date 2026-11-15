@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Claudio Code relay installer. Run on your OWN server next to relay.js
+# ClAudio Codice relay installer. Run on your OWN server next to relay.js
 # (both files come from this repository). It generates a token and a
 # self-signed TLS cert, writes config.json, installs the single npm
 # dependency (ws), starts the relay, VERIFIES it answers, and prints the
-# one-tap setup link (claudio://setup?...) plus a QR code — scan it with
+# one-tap setup link (claudio-codice://setup?...) plus a QR code — scan it with
 # the phone camera and the app configures itself.
 set -euo pipefail
 
@@ -89,7 +89,7 @@ if ! echo "$IP" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
   echo "rerun with an explicit address:  IP=x.x.x.x bash install-relay.sh"
   exit 1
 fi
-LINK="claudio://setup?url=https://$IP:$PORT&token=$TOKEN&pin=$PIN"
+LINK="claudio-codice://setup?url=https://$IP:$PORT&token=$TOKEN&pin=$PIN"
 
 echo
 echo "── phone setup ─────────────────────────────────────────"

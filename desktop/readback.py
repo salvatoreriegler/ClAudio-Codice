@@ -14,7 +14,7 @@ Config: ~/.claude/voice/bridge/config.json
   { "url": "https://<your-server>:8443",
     "token": "<the token printed by install-relay.sh>",
     "cacert": "cert.pem",          # copy it from the server, same folder
-    "voice": "ru-RU-DmitryNeural" } # any edge-tts voice
+    "voice": "it-IT-DiegoNeural" } # any edge-tts voice
 
 Toggle: presence of ~/.claude/voice/ON   (delete the file = voice off)
 Log:    ~/.claude/voice/readback.log     (every refusal is written here)
@@ -31,7 +31,7 @@ TOGGLE = os.path.join(DIR, "ON")
 LOG = os.path.join(DIR, "readback.log")
 LOCK = os.path.join(DIR, "readback.lock")
 LASTSENT = os.path.join(DIR, "last_sent.txt")
-DEFAULT_VOICE = "ru-RU-DmitryNeural"
+DEFAULT_VOICE = "it-IT-DiegoNeural"
 # edge-tts times out often enough that one attempt loses parts of an answer, and a
 # listener who gets part 2 without part 1 has no way to notice. Smaller chunks
 # synthesize faster (fewer timeouts), the timeout is generous, retries are many.
