@@ -136,7 +136,7 @@ public class ReleaseReadinessTest {
         render("renderMoney", state);
         EditText price = (EditText)field("planPriceEdit");
         price.setText("23.50");
-        TextView save = findText((View)field("sheetList"), "сохранить");
+        TextView save = findText((View)field("sheetList"), "salva");
         assertNotNull(save);
         save.performClick();
         assertEquals("23.50", price.getText().toString());
