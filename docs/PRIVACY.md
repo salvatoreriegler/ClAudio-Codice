@@ -1,43 +1,13 @@
-# Privacy Policy — Claudio Code
+# Dove passano i dati
 
-*Last updated: 2026-08-14*
+ClAudio Codice usa un relay configurato e gestito dall'utente. Questo documento descrive il flusso tecnico dei dati del fork.
 
-Claudio Code is a self-hosted voice walkie-talkie for AI coding sessions. It
-connects **only** to a relay server that you install and operate yourself.
+- **Riconoscitore Android**: l'audio viene gestito dal servizio installato sul telefono. L'elaborazione può usare servizi online, secondo provider e configurazione.
+- **Whisper**: i segmenti audio viaggiano tramite TLS verso il relay scelto e vengono trascritti da `whisper.cpp` sul server.
+- **Risposte vocali desktop**: `readback.py` usa `edge-tts`, che invia il testo al servizio vocale Microsoft. Il sistema quindi non è interamente locale. L'audio prodotto passa dal relay al telefono.
+- **Avvisi Android**: sono sintetizzati dal motore TTS del dispositivo; elaborazione locale o remota dipende da quel motore.
+- **Messaggi a Claude Code**: passano dal relay alla sessione e al provider AI configurato.
 
-## What the app records
+L'app conserva configurazione e cronologia localmente, con backup Android disattivato. Il relay conserva code, testo e audio: parte dello stato è in memoria, mentre i canali gestiti possono usare code persistenti.
 
-The app records microphone audio **only while dictation is active** (a
-foreground-service notification with a microphone badge is always visible
-while it can listen). Recorded audio is sent over TLS **exclusively to the
-relay server address you configured** — a server you own. Nothing is sent
-anywhere else.
-
-## What the developer collects
-
-**Nothing.** The app contains no analytics, no advertising SDKs, no crash
-reporting, and no developer-operated backend. The developer of this app never
-receives your audio, your text, your token, or any telemetry.
-
-## Where your data lives
-
-- Audio and transcribed text: on **your** relay server, under your control.
-- Settings (relay address, access token, certificate fingerprint): stored
-  locally on the device in app-private storage, excluded from cloud backup
-  (`allowBackup=false`).
-
-## Data sharing
-
-None. There are no third parties in this system unless you configure your own
-relay to add them.
-
-## Permissions
-
-- **Microphone** — dictation to your AI sessions; active only during use.
-- **Bluetooth** — headset microphone and buttons.
-- **Notifications / Foreground service** — the always-visible status of the
-  radio, required by Android for background microphone use.
-
-## Contact
-
-Questions: open an issue in the project repository.
+Il progetto non include analytics, pubblicità o un relay condiviso gestito dal fork. I registri possono contenere testo, nomi dei canali e indirizzi: controllali prima di condividerli. Token, chiavi TLS e impostazioni personali sono esclusi dal repository.
