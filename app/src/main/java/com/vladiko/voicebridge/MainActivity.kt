@@ -236,6 +236,14 @@ class MainActivity : AppCompatActivity() {
     private var lastModels: JSONObject? = null  // последнее полученное: сбой сети не стирает экран
     private var lastSheetTick = 0L       // v0.79: живое обновление открытого списка каналов
     private var lastSessionsFetch = 0L
+    private var sessionsBusy = false
+    private lateinit var channelPicker: FrameLayout
+    private lateinit var channelPickerList: LinearLayout
+    private lateinit var channelPickerScroll: ScrollView
+    private var channelPickerSignature = ""
+    private var channelAliasMode = false
+    private lateinit var channelPickerHeading: TextView
+    private val feedCaptions = ArrayList<Pair<TextView, Long>>()
     private var userScrubbing = false
     private var lastCircleKey = ""
 
@@ -329,6 +337,7 @@ class MainActivity : AppCompatActivity() {
 
         buildMainScreen()
         buildSheetOverlay()
+        buildChannelPicker()
         buildSettingsOverlay()
         buildDebugOverlay()
         buildOnboardOverlay()
@@ -351,6 +360,7 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    channelPicker.visibility == View.VISIBLE -> channelPicker.visibility = View.GONE
                     sheetOverlay.visibility == View.VISIBLE -> sheetOverlay.visibility = View.GONE
                     debugOverlay.visibility == View.VISIBLE -> debugOverlay.visibility = View.GONE
                     settingsOverlay.visibility == View.VISIBLE -> settingsOverlay.visibility = View.GONE
@@ -462,21 +472,19 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        chipBtn = tv("▾ Scegli una chat", 21f, cPlay).apply {
+        chipBtn = tv("Scegli una chat   ▾", 26f, cText, bold = true).apply {
             background = GradientDrawable().apply {
-                setColor(0); setStroke(dp(1), cPlay); cornerRadius = dp(16).toFloat()
+                setColor(cCard); setStroke(dp(2), cPlay); cornerRadius = dp(12).toFloat()
             }
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            minHeight = dp(64)
+            setPadding(dp(18), dp(14), dp(18), dp(14))
+            minHeight = dp(88)
+            gravity = Gravity.CENTER_VERTICAL
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
             maxLines = 2
             contentDescription = tr("текущий канал — тап открывает список", "current channel — tap to open the list", "canale attuale — tocca per aprire l'elenco")
-            setOnClickListener { openSheet() }
+            setOnClickListener { openChannelPicker() }
             // наследник старой кнопки «слушать крайнее»: свежайшее сообщение ЛЮБОЙ сессии
-            setOnLongClickListener {
-                LogBus.add(tr("чип (долгий тап) — играю крайнее отовсюду", "chip (long tap) — playing the latest from everywhere"))
-                ensureService { it.playLatestEverywhere() }
-                true
-            }
+
         }
         muteBtn = tv("🔇", 16f, cDim).apply {
             setPadding(dp(10), dp(6), dp(10), dp(6))
@@ -699,7 +707,7 @@ class MainActivity : AppCompatActivity() {
         dockPause.setOnLongClickListener {
             BridgeService.instance?.stopPlayback(false); true
         }
-        val dockCh = dockBtn(tr("каналы", "channels", "canali"), tr("список каналов", "channel list", "elenco dei canali")) { openSheet() }
+        val dockCh = dockBtn(tr("каналы", "channels", "canali"), tr("список каналов", "channel list", "elenco dei canali")) { openChannelPicker() }
         val dockLog = dockBtn(tr("журнал", "log", "registro"), tr("журнал и отладка", "log and debug", "registro e diagnostica")) { debugOverlay.visibility = View.VISIBLE; renderLog() }
         val dock = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1005,6 +1013,7 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             paint()
             if (System.currentTimeMillis() - lastFeedFetch > 4000) refreshFeed(false)
+            if (System.currentTimeMillis() - lastSessionsFetch > 5000) fetchSessions()
             // v0.79: открытый список каналов живёт сам — состояние «работает / ответила»
             // должно меняться на глазах, без закрыть-открыть
             if (sheetOverlay.visibility == View.VISIBLE && sheetMode == "channels" &&
@@ -1012,7 +1021,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 lastSheetTick = System.currentTimeMillis()
                 rebuildSheet()
-                if (System.currentTimeMillis() - lastSessionsFetch > 15000) fetchSessions()
+
             }
             // экран «Модели» обновляется сам: хаб шлёт состояние раз в минуту и после задачи
             if (sheetOverlay.visibility == View.VISIBLE && sheetMode == "models" &&
@@ -1054,14 +1063,16 @@ class MainActivity : AppCompatActivity() {
         // поля называет, куда уйдёт текст, чтобы расхождение было видно до отправки
         val hintNow = tr("в «", "to “", "a “") + feedName() + tr("»: написать…", "”: type…", "”: scrivi…")
         if (textEdit.hint?.toString() != hintNow) textEdit.hint = hintNow
-        chipBtn.text = "▾ " + if (tgtSid.isEmpty()) "Scegli una chat" else SessionNameMatcher.displayName(name)
+        chipBtn.text = (if (tgtSid.isEmpty()) "Scegli una chat" else name) + "   ▾"
+        refreshChatCaptions()
+        if (channelPicker.visibility == View.VISIBLE) rebuildChannelPicker()
         handsFreeBtn.text = if (Cfg.handsFree) "✓ Mani libere" else "Mani libere: spente"
         val live = svc?.liveTranscript().orEmpty()
         val pending = svc?.pendingTranscript().orEmpty()
         liveText.text = when {
             live.isNotEmpty() -> "${svc?.conversationStatus?.takeIf { it.startsWith("Non inviato") } ?: "Tu · bozza"}\n${if (live.length > 240) "…" else ""}${live.takeLast(240)}"
             pending.isNotEmpty() -> "${svc?.conversationStatus}\n$pending"
-            !running -> "Scegli una chat e tocca Parla per iniziare"
+            !running -> if (tgtSid.isEmpty()) "Scegli una chat per iniziare" else "Tocca il cerchio per iniziare"
             else -> svc?.conversationStatus?.ifEmpty { st } ?: st
         }
 
@@ -1136,7 +1147,8 @@ class MainActivity : AppCompatActivity() {
             st.startsWith(tr("ОТПРАВЛЕНО", "SENT", "INVIATO")) -> tr("микрофон спит — кнопка гарнитуры тоже будит", "mic asleep — the headset button wakes it too", "microfono in attesa — lo riattivi anche dagli auricolari")
             else -> tr("долгий тап — выключить рацию", "long tap — turn the radio off", "tieni premuto per spegnere")
         }
-        if (running) hintText.text = "${svc!!.recognitionEngineName()} · ${hintText.text}"
+        if (running) hintText.text = "${svc!!.recognitionEngineName()} · " +
+            (if (svc.isPlaying()) svc.playbackInterruptionHint() else hintText.text)
 
         cancelBtn.visibility =
             if (running && (svc!!.isListening() || svc.hasPendingDictation())) View.VISIBLE else View.GONE
@@ -1227,7 +1239,7 @@ class MainActivity : AppCompatActivity() {
     private fun feedName(): String {
         val sid = feedSid.ifEmpty { currentSid() }
         if (sid.isEmpty()) return "—"
-        return SessionBook.all().firstOrNull { it.sid == sid }?.proj?.ifEmpty { sid.take(8) } ?: sid.take(8)
+        return SessionBook.displayName(sid, sid.take(8))
     }
 
     private fun refreshFeed(force: Boolean) {
@@ -1420,6 +1432,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun refreshChatCaptions() {
+        val name = feedName()
+        for ((view, ts) in feedCaptions) {
+            val label = "$name · ${hhmm(ts)}"
+            if (view.text.toString() != label) view.text = label
+        }
+    }
+
     private fun renderFeed(rows: List<Row>, offline: Boolean, force: Boolean = false) {
         lastRows = rows
         lastOffline = offline
@@ -1435,6 +1455,7 @@ class MainActivity : AppCompatActivity() {
         }
         pendingRows = null
         lastFeedSig = sig
+        feedCaptions.clear()
         feedBox.removeAllViews()
         feedBodies.clear()
         if (rows.isEmpty()) {
@@ -1480,7 +1501,7 @@ class MainActivity : AppCompatActivity() {
                 setPadding(dp(11), dp(7), dp(11), dp(8))
             }
             val who = if (r.out) tr("ты · ${hhmm(r.ts)}", "you · ${hhmm(r.ts)}", "tu · ${hhmm(r.ts)}") + (if (r.note.isNotEmpty()) " · ${r.note}" else "")
-            else tr("${r.inMsg?.proj?.ifEmpty { "канал" } ?: "канал"} · ${hhmm(r.ts)}", "${r.inMsg?.proj?.ifEmpty { "channel" } ?: "channel"} · ${hhmm(r.ts)}", "${r.inMsg?.proj?.ifEmpty { "canale" } ?: "canale"} · ${hhmm(r.ts)}")
+            else "${feedName()} · ${hhmm(r.ts)}"
             val capRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1489,6 +1510,7 @@ class MainActivity : AppCompatActivity() {
                 maxWidth = maxW
                 if (r.out) gravity = Gravity.END
             }
+            if (!r.out) feedCaptions.add(cap to r.ts)
             capRow.addView(cap, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             if (!r.out && r.inMsg != null && r.inMsg.audios.isNotEmpty()) {
                 val m = r.inMsg
@@ -1548,7 +1570,7 @@ class MainActivity : AppCompatActivity() {
     private fun playMsg(m: InMsg, fromHere: Boolean) {
         val sid = feedSid.ifEmpty { currentSid() }
         if (sid.isEmpty()) return
-        val proj = m.proj
+        val proj = SessionBook.displayName(sid, m.proj)
         val chosen = if (fromHere) lastMsgs.filter { it.ts >= m.ts }.sortedBy { it.ts } else listOf(m)
         val items = chosen.flatMap { mm -> mm.audios.map { Pair(it.second, mm.ts) } }
             .filter { it.first.isNotEmpty() }
@@ -1561,6 +1583,117 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ── шторка «каналы» ──────────────────────────────────────────────────
+    private fun editSessionAlias(sid: String) {
+        val input = EditText(this).apply {
+            setSingleLine(true); textSize = 22f
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+            filters = arrayOf(android.text.InputFilter.LengthFilter(60))
+            hint = "Es. Documenti, Lavoro, Test"
+            setText(SessionBook.alias(sid))
+            selectAll()
+        }
+        fun updated() {
+            channelPickerSignature = ""
+            rebuildChannelPicker(); refreshChatCaptions(); paint()
+            if (sid == Cfg.replyTarget) BridgeService.instance?.onReplyTargetPicked()
+        }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Alias locale")
+            .setMessage("Nome sul PC: ${SessionNameMatcher.displayName(SessionBook.name(sid))}\nL’alias viene usato su questo telefono anche nei comandi vocali.")
+            .setView(input)
+            .setPositiveButton("Salva", null)
+            .setNeutralButton("Usa nome originale") { _, _ -> SessionBook.setAlias(this, sid, ""); updated() }
+            .setNegativeButton("Annulla", null).create()
+        dialog.show()
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+            if (SessionBook.setAlias(this, sid, input.text.toString())) { updated(); dialog.dismiss() }
+            else input.error = "Nome già usato da un’altra chat: scegli un alias diverso"
+        }
+    }
+
+    private fun buildChannelPicker() {
+        channelPickerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        channelPickerScroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(channelPickerList, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setBackgroundColor(cBg)
+            channelPickerHeading = tv("Cambia chat", 28f, cText, bold = true).apply {
+                setPadding(dp(4), dp(12), dp(4), dp(16))
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }
+            addView(channelPickerHeading)
+            addView(tv("Tocca il nome della conversazione", 16f, cDim).apply {
+                setPadding(dp(4), 0, dp(4), dp(12))
+            })
+            addView(channelPickerScroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+            addView(tv("Chiudi", 22f, cText, bold = true).apply {
+                minHeight = dp(64); gravity = Gravity.CENTER; background = bordered(12)
+                setOnClickListener { channelPicker.visibility = View.GONE }
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+            addView(tv("Alias locali", 18f, cPlay).apply {
+                minHeight = dp(56); gravity = Gravity.CENTER
+                setOnClickListener { channelAliasMode = !channelAliasMode; channelPickerSignature = ""; rebuildChannelPicker() }
+            })
+            addView(tv("Gestisci canali", 16f, cDim).apply {
+                minHeight = dp(56); gravity = Gravity.CENTER
+                setOnClickListener { channelPicker.visibility = View.GONE; openSheet() }
+            })
+        }
+        channelPicker = FrameLayout(this).apply {
+            visibility = View.GONE; isClickable = true
+            addView(panel, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+        rootFrame.addView(channelPicker, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+    }
+
+    private fun openChannelPicker() {
+        channelAliasMode = false
+        channelPickerSignature = ""
+        rebuildChannelPicker()
+        channelPicker.visibility = View.VISIBLE
+        fetchSessions()
+    }
+
+    private fun rebuildChannelPicker() {
+        val entries = SessionBook.all().filter { !SessionBook.isForgotten(this, it.sid) }
+            .sortedWith(compareBy({ SessionBook.displayName(it.sid).lowercase() }, { it.sid }))
+        val signature = "$channelAliasMode:${Cfg.replyTarget}" + entries.joinToString { "${it.sid}:${it.proj}:${SessionBook.alias(it.sid)}:${aliveMap[it.sid]}" }
+        if (signature == channelPickerSignature) return
+        channelPickerSignature = signature
+        channelPickerHeading.text = if (channelAliasMode) "Scegli a chi dare un alias" else "Cambia chat"
+        val scrollY = channelPickerScroll.scrollY
+        channelPickerList.removeAllViews()
+        if (entries.isEmpty()) channelPickerList.addView(tv("Nessuna chat disponibile · controllo il collegamento…", 20f, cDim))
+        for (entry in entries) {
+            val selected = entry.sid == Cfg.replyTarget
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = dp(104); setPadding(dp(18), dp(16), dp(18), dp(16))
+                background = GradientDrawable().apply {
+                    setColor(if (selected) cAccSoft else cCard)
+                    setStroke(dp(if (selected) 3 else 1), if (selected) cPlay else cLine)
+                    cornerRadius = dp(14).toFloat()
+                }
+                isClickable = true; isFocusable = true
+                contentDescription = SessionBook.displayName(entry.sid) + if (selected) ", chat selezionata" else ", seleziona chat"
+                addView(tv(SessionBook.displayName(entry.sid), 26f, cText, bold = true).apply {
+                    maxLines = 3; typeface = android.graphics.Typeface.DEFAULT_BOLD
+                })
+                val origin = if (entry.proj.contains("WSL")) "WSL" else "PC"
+                addView(tv((if (selected) "✓ IN USO · " else "") + origin +
+                    (if (aliveMap[entry.sid] == false) " · non attiva" else ""), 15f, if (selected) cPlay else cDim))
+                setOnClickListener { if (channelAliasMode) editSessionAlias(entry.sid) else selectConversation(entry.sid) }
+                setOnLongClickListener { editSessionAlias(entry.sid); true }
+            }
+            channelPickerList.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(12) })
+        }
+        channelPickerScroll.post { channelPickerScroll.scrollTo(0, scrollY) }
+    }
+
     private fun buildSheetOverlay() {
         sheetList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         // v0.86.1 (боевое: «список развернулся на весь экран — как его свернуть?»):
@@ -1685,6 +1818,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectConversation(sid: String) {
+        channelPicker.visibility = View.GONE
         sheetOverlay.visibility = View.GONE
         viewSid = ""
         val svc = BridgeService.instance
@@ -1706,7 +1840,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fetchSessions() {
-        if (Cfg.token.isEmpty() || Cfg.url.isEmpty()) return
+        if (sessionsBusy || Cfg.token.isEmpty() || Cfg.url.isEmpty()) return
+        sessionsBusy = true
         lastSessionsFetch = System.currentTimeMillis()
         // список освежается с релея в фоне — имена, время, кто жив
         Thread {
@@ -1727,6 +1862,7 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (_: Exception) {}
             main.post {
+                sessionsBusy = false
                 val inBook = SessionBook.all().map { it.sid }.toHashSet()
                 for (t in parsed) {
                     // 15.10 (боевое: «убрал лишние — все вернулись»): у канала без единого сообщения
@@ -1734,8 +1870,12 @@ class MainActivity : AppCompatActivity() {
                     // публикации, и удалённая строка воскресала через 15с. Такой канал возвращает
                     // только настоящее сообщение (событие voice) или галочка в «править».
                     if (t.first in noHistory && t.first !in inBook && SessionBook.isForgotten(this, t.first)) continue
-                    SessionBook.seen(this, t.first, t.second, t.third)
+                    SessionBook.syncName(this, t.first, t.second, t.third)
+                    Feed.renameSession(this, t.first, SessionBook.name(t.first, t.second))
                 }
+                refreshChatCaptions()
+                paint()
+                if (channelPicker.visibility == View.VISIBLE) rebuildChannelPicker()
                 // поздний ответ сети не смеет подменить шторку накопленного списком каналов
                 if (sheetOverlay.visibility == View.VISIBLE && sheetMode == "channels") rebuildSheet()
             }
@@ -1853,7 +1993,7 @@ class MainActivity : AppCompatActivity() {
             val unheard = e.lastTs > prefs.getLong("heard_${e.sid}", 0L)
             // имя — главное на строке: крупнее, во всю ширину, метки минимальные
             val nm = tv(
-                (if (target) "✓ " else "") + SessionNameMatcher.displayName(e.proj).ifEmpty { e.sid.take(8) } +
+                (if (target) "✓ " else "") + SessionBook.displayName(e.sid, e.sid.take(8)) +
                     (if (hubOf(e.sid) == "laptop") tr(" · ноутбук", " · laptop") else ""),
                 22f, cText
             ).apply {
@@ -3576,6 +3716,8 @@ class MainActivity : AppCompatActivity() {
                 Cfg.handsFree = on
                 BridgeService.instance?.let { s -> if (on) s.startListening() else s.stopListening() }
             }))
+        advBox.addView(switchRow("Interrompi parlando", "Con Claude, ascolta la tua voce anche durante le risposte; attivo dalla prossima risposta",
+            { Cfg.bargeIn }, { on -> Cfg.bargeIn = on; BridgeService.instance?.onBargeInToggled() }))
         advBox.addView(switchRow("Riconoscimento Claude", "Usa Claude tramite il PC quando il relay lo supporta; disattiva per usare Android",
             { Cfg.claudeSpeech }, { on ->
                 Cfg.claudeSpeech = on

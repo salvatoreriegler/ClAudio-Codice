@@ -45,6 +45,7 @@ object Cfg {
     // v0.35: dictation goes to server whisper (fallback: Android recognizer).
     // v0.67: default is flavor-dependent — personal true (owner runs whisper.cpp),
     // store false (a newcomer has no whisper backend; Android recognition works out of the box).
+    var bargeIn = true
     var claudeSpeech = true
     var whisper = BuildConfig.DEF_WHISPER
     // v0.63: recording source for the whisper recorder. VOICE_COMMUNICATION (true) is what
@@ -87,6 +88,7 @@ object Cfg {
         // миграция: включённый solo — это набор из одного канала
         if (pickedSids.isEmpty() && soloSid.isNotEmpty()) pickedSids = soloSid
         voiceCues = p.getBoolean("voiceCues", true)
+        bargeIn = p.getBoolean("bargeIn", true)
         claudeSpeech = p.getBoolean("claudeSpeech", true)
         whisper = p.getBoolean("whisper", BuildConfig.DEF_WHISPER)
         micVoiceComm = p.getBoolean("micVoiceComm", true)
@@ -112,6 +114,7 @@ object Cfg {
             .putString("pickedSids", pickedSids)
             .putString("pickedNames", pickedNames)
             .putBoolean("voiceCues", voiceCues)
+            .putBoolean("bargeIn", bargeIn)
             .putBoolean("claudeSpeech", claudeSpeech)
             .putBoolean("whisper", whisper)
             .putBoolean("micVoiceComm", micVoiceComm)
@@ -126,9 +129,17 @@ object SessionBook {
     data class Entry(val sid: String, var proj: String, var lastTs: Long, var muted: Boolean)
 
     private val map = LinkedHashMap<String, Entry>()
+    private val canonical = HashSet<String>()
+    private val aliases = HashMap<String, String>()
 
     fun load(ctx: Context) {
         map.clear()
+        canonical.clear()
+        aliases.clear()
+        try {
+            val saved = org.json.JSONObject(ctx.getSharedPreferences("bridge", Context.MODE_PRIVATE).getString("localAliases", "{}") ?: "{}")
+            for (sid in saved.keys()) saved.optString(sid).takeIf { it.isNotBlank() }?.let { aliases[sid] = it }
+        } catch (_: Exception) {}
         try {
             val raw = ctx.getSharedPreferences("bridge", Context.MODE_PRIVATE)
                 .getString("sessions", "[]") ?: "[]"
@@ -137,6 +148,7 @@ object SessionBook {
                 val o = arr.getJSONObject(i)
                 val e = Entry(o.getString("sid"), o.optString("proj"), o.optLong("lastTs"), o.optBoolean("muted"))
                 map[e.sid] = e
+                if (o.optBoolean("canonical")) canonical.add(e.sid)
             }
         } catch (_: Exception) {}
     }
@@ -147,7 +159,7 @@ object SessionBook {
             for (e in map.values) {
                 arr.put(
                     org.json.JSONObject()
-                        .put("sid", e.sid).put("proj", e.proj)
+                        .put("sid", e.sid).put("proj", e.proj).put("canonical", e.sid in canonical)
                         .put("lastTs", e.lastTs).put("muted", e.muted)
                 )
             }
@@ -161,11 +173,51 @@ object SessionBook {
         // удалённый канал не воскрешаем старой историей — только новым ответом
         if (!map.containsKey(sid) && ts <= forgotTs(ctx, sid)) return Entry(sid, proj, ts, false)
         val e = map.getOrPut(sid) { Entry(sid, proj, ts, false) }
-        if (proj.isNotEmpty()) e.proj = proj
+        if (proj.isNotEmpty() && sid !in canonical) e.proj = proj
         if (ts > e.lastTs) e.lastTs = ts
-        while (map.size > 20) map.remove(map.keys.first())
+        while (map.size > 100) map.keys.first().let { map.remove(it); canonical.remove(it) }
         save(ctx)
         return e
+    }
+
+    @Synchronized
+    fun syncName(ctx: Context, sid: String, proj: String, ts: Long) {
+        seen(ctx, sid, "", ts)
+        val entry = map[sid] ?: return
+        if (proj.isBlank()) return
+        // When a native session closes, /sessions may fall back to the title of an
+        // old audio event. Keep the verified native name until new native metadata arrives.
+        if (sid in canonical && SessionNameMatcher.hasOrigin(entry.proj) && !SessionNameMatcher.hasOrigin(proj)) return
+        val changed = entry.proj != proj || sid !in canonical
+        entry.proj = proj
+        canonical.add(sid)
+        if (changed) save(ctx)
+    }
+
+    @Synchronized
+    fun name(sid: String, fallback: String = ""): String =
+        map[sid]?.proj?.takeIf { it.isNotBlank() } ?: fallback
+
+    @Synchronized
+    fun alias(sid: String): String = aliases[sid].orEmpty()
+
+    @Synchronized
+    fun displayName(sid: String, fallback: String = ""): String =
+        aliases[sid]?.takeIf { it.isNotBlank() } ?: SessionNameMatcher.displayName(name(sid, fallback.ifEmpty { sid.take(8) }))
+
+    @Synchronized
+    fun setAlias(ctx: Context, sid: String, value: String): Boolean {
+        if (!map.containsKey(sid)) return false
+        val clean = value.trim().replace(Regex("\\s+"), " ").take(60)
+        if (clean.isNotEmpty() && map.values.any { other ->
+                other.sid != sid && (SessionNameMatcher.sameName(clean, displayName(other.sid)) ||
+                    SessionNameMatcher.sameName(clean, SessionNameMatcher.displayName(other.proj)))
+            }) return false
+        if (clean.isEmpty()) aliases.remove(sid) else aliases[sid] = clean
+        val saved = org.json.JSONObject()
+        for ((key, text) in aliases) saved.put(key, text)
+        ctx.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit().putString("localAliases", saved.toString()).apply()
+        return true
     }
 
     fun isMuted(sid: String): Boolean = map[sid]?.muted == true
@@ -175,6 +227,7 @@ object SessionBook {
     // возвращалась бы сама. Канал вернётся, когда РЕАЛЬНО ответит что-то новое.
     fun forget(ctx: Context, sid: String) {
         map.remove(sid)
+        canonical.remove(sid)
         val p = ctx.getSharedPreferences("bridge", Context.MODE_PRIVATE)
         val ed = p.edit().putLong("forgot_$sid", System.currentTimeMillis())
         // v1.14 (боевое: «удалил тестовый канал из списка, а после перезапуска приложения он

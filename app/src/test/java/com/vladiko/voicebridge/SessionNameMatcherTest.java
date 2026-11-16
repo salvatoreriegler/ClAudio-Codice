@@ -61,4 +61,10 @@ public class SessionNameMatcherTest {
         chats.add(chat("wanted", "Claude WSL Ubuntu - SECURDOC 1 [98f0e69c]"));
         assertEquals("wanted", SessionNameMatcher.INSTANCE.match("SECURDOC 1", chats).getSid());
     }
+    @Test public void localAliasesShareAnIdButConflictingSessionsRemainAmbiguous() {
+        assertEquals("a",find("Documenti",chat("a","SECURDOC 1"),chat("a","Documenti")));
+        assertEquals("a",find("SECURDOC 1",chat("a","Documenti"),chat("a","SECURDOC 1")));
+        assertNull(find("Documenti",chat("a","Documenti"),chat("b","Documenti")));
+        assertEquals("a",find("documenti",chat("a","Documenti"),chat("a","documenti")));
+    }
 }

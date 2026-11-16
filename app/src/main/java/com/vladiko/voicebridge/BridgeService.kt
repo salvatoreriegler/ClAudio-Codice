@@ -166,11 +166,26 @@ class BridgeService : Service() {
     private var claudeSpeechAvailable = false
     private var remoteRecognizer: SpeechInput? = null
     private var speechGeneration = 0
+    @Volatile private var speechDuringPlayback = false
+    private var playbackSpeechText = ""
+    private var playbackMessageId = ""
+    private var bargeInUnavailable = false
+    private var duplexRouteActive = false
+    private var duplexPreviousMode = AudioManager.MODE_NORMAL
+    private var duplexPreviousSpeaker = false
+    fun playbackInterruptionHint(): String = when {
+        !Cfg.bargeIn -> "Interruzione vocale disattivata"
+        dictHold || System.currentTimeMillis() < noAutoWakeUntil -> "Microfono in pausa · usa Parla"
+        !useClaudeSpeech() -> "Interruzione vocale disponibile con riconoscimento Claude"
+        bargeInUnavailable -> "Microfono non disponibile · usa Parla"
+        speechDuringPlayback && recActive -> "Puoi interrompere parlando"
+        else -> "Preparo il microfono per ascoltarti…"
+    }
     private var speechFactory: (RemoteSpeechRecognizer.Listener) -> SpeechInput = { listener ->
         RemoteSpeechRecognizer(Net.client(Cfg.pin), Cfg.url, Cfg.token,
-            (listOf(replyTargetName()) + SessionBook.all().map { it.proj })
-                .map { SessionNameMatcher.displayName(it) }.distinct().take(12).joinToString("|").take(800),
-            { ttsGateActive() || playing || paused }, listener)
+            (listOf(replyTargetName()) + SessionBook.all().flatMap { listOf(SessionBook.displayName(it.sid), SessionNameMatcher.displayName(it.proj)) })
+                .distinct().take(12).joinToString("|").take(800),
+            { ttsGateActive() || (!speechDuringPlayback && (playing || paused)) }, listener)
     }
     private fun useClaudeSpeech() = !Cfg.whisper && Cfg.claudeSpeech && claudeSpeechAvailable
     fun recognitionEngineName(): String = when {
@@ -564,6 +579,8 @@ class BridgeService : Service() {
         pendingPress = null
         pendingSend = false
         stopListening()
+        cancelRemoteSpeech()
+        releaseDuplexAudio()
         recognizer?.destroy()
         ws?.cancel()
         ws = null
@@ -782,7 +799,7 @@ class BridgeService : Service() {
 
     private fun freshSessions(): List<Pair<String, String>> =
         SessionBook.all().sortedByDescending { it.lastTs }.take(4)
-            .map { it.sid to it.proj.ifEmpty { it.sid.take(4) } }
+            .map { it.sid to SessionBook.displayName(it.sid, it.sid.take(4)) }
 
 
     private fun handleRadioCommand(c: JSONObject?) {
@@ -838,11 +855,12 @@ class BridgeService : Service() {
     }
 
     private fun matchSessionByName(spoken: String): Pair<String, String>? {
-        val candidates = SessionBook.all().map {
-            SessionNameMatcher.Candidate(it.sid, it.proj.ifEmpty { it.sid })
+        val candidates = SessionBook.all().flatMap {
+            listOf(SessionNameMatcher.Candidate(it.sid, it.proj.ifEmpty { it.sid }),
+                SessionNameMatcher.Candidate(it.sid, SessionBook.displayName(it.sid)))
         }
         val hit = SessionNameMatcher.match(spoken, candidates) ?: return null
-        return hit.sid to hit.name
+        return hit.sid to SessionBook.displayName(hit.sid, hit.name)
     }
 
     private fun switchByName(said: String) {
@@ -1320,6 +1338,11 @@ class BridgeService : Service() {
     }
 
     private fun updateNotification() {
+        if (speechDuringPlayback && ((!playing && !paused) || dictHold || Cfg.voiceOff || !Cfg.bargeIn)) {
+            cancelRemoteSpeech()
+            if (!playing) releaseDuplexAudio()
+        }
+        if (duplexRouteActive && !playing && !listening) releaseDuplexAudio()
         if (!alive) return
         val state = when {
             playing -> tr("играю ответ", "playing reply")
@@ -1761,7 +1784,8 @@ class BridgeService : Service() {
     // available through "replay last".
     // v0.10 (слово юзера «хочу прервать озвучку и сразу начать диктовать»): thenListen сразу
     // поднимает микрофон — без второго нажатия. Пауза на устаканивание маршрута A2DP→SCO.
-    fun stopPlayback(thenListen: Boolean = false) {
+    fun stopPlayback(thenListen: Boolean = false, keepMicrophone: Boolean = false) {
+        if (!keepMicrophone) cancelRemoteSpeech()
         cueHold = false
         touchUser()
         playGen++   // v0.36: убить отложенные продолжения (докачка, routeWait) — иначе зомби-озвучка
@@ -1770,7 +1794,7 @@ class BridgeService : Service() {
         player = null
         currentFile = null
         paused = false
-        flushCueQueue()      // v1.13: см. resumePlayback — иначе отложенное молчит вечно
+        if (!keepMicrophone) flushCueQueue()      // v1.13: см. resumePlayback — иначе отложенное молчит вечно
         currentSid = null
         playQueue.clear()
         fileQueue.clear()
@@ -1781,7 +1805,7 @@ class BridgeService : Service() {
         lastPartsTotal = lastPartNum   // v0.42: стоп = сообщение больше не ждём
         partWaitDeadline = 0L
         abandonFocus()
-        beepBoth(ToneGenerator.TONE_PROP_BEEP, 120)
+        if (!keepMicrophone) { releaseDuplexAudio(); beepBoth(ToneGenerator.TONE_PROP_BEEP, 120) }
         LogBus.add(
             if (thenListen) tr("озвучка прервана — диктуй (повтор ответа: тройное нажатие)", "playback interrupted — dictate (replay the reply: triple press)")
             else tr("озвучка остановлена (повтор — тройное нажатие / кнопка)", "playback stopped (replay — triple press / button)")
@@ -2020,7 +2044,7 @@ class BridgeService : Service() {
             pendingTargetSid = sid
             pendingTargetListen = thenListen
             pendingCloseUtt = uttId
-            val to = SessionBook.all().firstOrNull { it.sid == sid }?.proj?.ifEmpty { sid.take(8) } ?: sid.take(8)
+            val to = SessionBook.displayName(sid, sid.take(8))
             LogBus.add(tr("сначала дошлю начатое в «${replyTargetName()}», потом переключусь на «$to»", "will first send what was started to “${replyTargetName()}”, then switch to “$to”"))
             cue(tr("отправляю начатое, потом переключусь", "sending what you started, then switching", "invio la bozza, poi cambio canale"))
             buzz(180)
@@ -2109,7 +2133,7 @@ class BridgeService : Service() {
         Cfg.pickedSids.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
     private fun nameOf(sid: String): String =
-        SessionBook.all().firstOrNull { it.sid == sid }?.proj?.ifEmpty { sid.take(8) } ?: sid.take(8)
+        SessionBook.displayName(sid, sid.take(8))
 
     fun pickedNames(): String = picked().joinToString(", ") { nameOf(it) }
 
@@ -2281,8 +2305,7 @@ class BridgeService : Service() {
     fun replyTargetName(): String {
         val sid = replyTargetSid()
         if (sid.isEmpty()) return "—"
-        return SessionBook.all().firstOrNull { it.sid == sid }?.proj?.ifEmpty { sid.take(8) }
-            ?: lastProj ?: sid.take(8)
+        return SessionBook.displayName(sid, lastProj ?: sid.take(8))
     }
 
     // ── playback position API (for the on-screen scrubber) ─────────────────
@@ -3149,7 +3172,7 @@ class BridgeService : Service() {
             // оставался true, и после доигрыша startListening выходил по гейту: «СЛУШАЮ» при
             // мёртвом распознавателе до 2 минут. Честный stopListening — рестарт после очереди
             // (ветка пустой очереди) отработает штатно.
-            stopListening()
+            if (listening || !speechDuringPlayback) stopListening()
             playFile(localFile)
             return
         }
@@ -3296,7 +3319,7 @@ class BridgeService : Service() {
                     ensureTargetCues()
                     LogBus.add(tr("зазор: открепляю адресата — отвечаю тому, кто договорил («${lastSpokenName()}»)", "gap: unpinning target — replying to whoever finished speaking (“${lastSpokenName()}”)"))
                 }
-                val who = o.optString("proj").ifEmpty { nextSid.take(4) }
+                val who = SessionBook.displayName(nextSid, o.optString("proj").ifEmpty { nextSid.take(4) })
                 // кто ДОГОВОРИЛ, а не закреплённый адресат. v1.16-fix: кроме ручного выбора —
                 // ответ уйдёт в выбранный, и звать «ответь договорившему» было бы враньём
                 val prev = if (Cfg.replyTarget.isNotEmpty() && Cfg.replyTarget != spoke && manualPinHolds())
@@ -3334,7 +3357,7 @@ class BridgeService : Service() {
         boundarySid = null
         playQueue.remove(o)
         playing = true
-        stopListening() // half-duplex: never transcribe our own playback
+        if (listening || !speechDuringPlayback) stopListening() // keep an existing playback monitor across parts
         if (!keepTgt) {
             answeredCurrent = false   // играет новое сообщение — ответа на него ещё не было
             // новое сообщение (не очередная часть того же) — заговорил новый «последний говоривший»
@@ -3374,10 +3397,18 @@ class BridgeService : Service() {
             }
         }
         currentSid = o.optString("session")
+        val spokenPart = o.optString("text")
+        val spokenId = o.optString("msgid")
+        if (spokenId != playbackMessageId) {
+            playbackSpeechText = ""
+            bargeInUnavailable = false
+        }
+        playbackMessageId = spokenId
+        playbackSpeechText = (playbackSpeechText.takeLast(1400) + " " + spokenPart).takeLast(4000)
         lastPartNum = o.optInt("part", 1)          // v0.42: знаем, докачано ли сообщение
         lastPartsTotal = o.optInt("parts", 1)
         partWaitDeadline = 0L
-        val proj = o.optString("proj")
+        val proj = SessionBook.displayName(currentSid.orEmpty(), o.optString("proj"))
         if (!keepTgt) lastProj = proj
         // v0.51: адресат ответа только что переехал на эту сессию — готовим её имя голосом,
         // пока играет сам ответ (к «слушаю» файл успеет дописаться)
@@ -3531,8 +3562,11 @@ class BridgeService : Service() {
             // v0.9 (боевое «начинается и через полсекунды обрывается/тонет»): выключение SCO АСИНХРОННОЕ —
             // плеер стартовал на умирающем канале, и система перекидывала маршрут ПОСРЕДИ озвучки.
             // Теперь ждём реального погашения маршрута (шаги по 250мс, потолок 2с) и только потом стартуем.
-            if (scoStarted) stopHeadsetMic()
-            if (routeDirty() && routeWait < 8) {
+            val duplex = Cfg.bargeIn && useClaudeSpeech() && hasMicPermission() && !dictHold &&
+                !Cfg.voiceOff && System.currentTimeMillis() > noAutoWakeUntil
+            if (duplex) prepareDuplexAudio()
+            if (!duplex && scoStarted) stopHeadsetMic()
+            if (!duplex && routeDirty() && routeWait < 8) {
                 main.postDelayed({ if (alive) playFile(f, routeWait + 1, seekTo, gen) }, 250)
                 return
             }
@@ -3542,14 +3576,14 @@ class BridgeService : Service() {
             player = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setUsage(if (duplex) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )
                 setDataSource(f.absolutePath)
                 setOnCompletionListener {
                     main.post {
-                        if (!alive) return@post
+                        if (!alive || gen != playGen) return@post
                         // v0.15: в «беззвучной паузе» файл доигрывает молча — не двигаем очередь,
                         // а перезапускаем его с точки паузы, чтобы поток (и кнопка) остались живы.
                         if (paused) {
@@ -3575,7 +3609,7 @@ class BridgeService : Service() {
                 setOnErrorListener { _, w, e ->
                     LogBus.add(tr("ошибка плеера $w/$e", "player error $w/$e"))
                     main.post {
-                        if (alive) { currentFile = null; playNext() }
+                        if (alive && gen == playGen) { currentFile = null; playNext() }
                     }
                     true
                 }
@@ -3600,6 +3634,7 @@ class BridgeService : Service() {
                     try { playbackParams = playbackParams.setSpeed(Cfg.speed) } catch (_: Exception) {}
                 }
             }
+            if (duplex && !bargeInUnavailable) startRemoteSpeech(forPlayback = true)
             updateNotification()
         } catch (e: Exception) {
             LogBus.add(tr("плеер не стартовал: ${e.message}", "player did not start: ${e.message}"))
@@ -4370,31 +4405,113 @@ class BridgeService : Service() {
         })
     }
 
+    fun onBargeInToggled() {
+        if (!Cfg.bargeIn && speechDuringPlayback) cancelRemoteSpeech()
+        updateNotification()
+    }
+
+    private fun prepareDuplexAudio() {
+        if (duplexRouteActive) return
+        try {
+            duplexPreviousMode = audioManager.mode
+            @Suppress("DEPRECATION")
+            duplexPreviousSpeaker = audioManager.isSpeakerphoneOn
+            duplexRouteActive = true
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            if (Build.VERSION.SDK_INT >= 31) {
+                val available = audioManager.availableCommunicationDevices
+                val wired = available.firstOrNull { it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
+                val bluetooth = if (Cfg.btMic) available.firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == 26 } else null
+                val device = wired ?: bluetooth ?: available.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                if (device != null) audioManager.setCommunicationDevice(device)
+            } else {
+                if (headsetPresent() && Cfg.btMic) startHeadsetMic()
+                else @Suppress("DEPRECATION") audioManager.isSpeakerphoneOn = true
+            }
+        } catch (_: Exception) { LogBus.add("Percorso audio simultaneo non disponibile") }
+    }
+
+    private fun releaseDuplexAudio() {
+        if (!duplexRouteActive) return
+        duplexRouteActive = false
+        try {
+            if (Build.VERSION.SDK_INT >= 31) audioManager.clearCommunicationDevice()
+            else @Suppress("DEPRECATION") audioManager.isSpeakerphoneOn = duplexPreviousSpeaker
+            audioManager.mode = duplexPreviousMode
+        } catch (_: Exception) {}
+    }
+
+    private fun beginVoiceInterruption() {
+        val speaker = currentSid ?: lastSession
+        val message = playbackMessageId
+        if (!speaker.isNullOrEmpty() && message.isNotEmpty()) {
+            skippedMsgIds.addLast("$speaker|$message")
+            while (skippedMsgIds.size > 50) skippedMsgIds.removeFirst()
+        }
+        // Keep this exact PCM/WebSocket stream: restarting it would drop the first words.
+        playing = false
+        listening = true
+        speechDuringPlayback = false
+        stopPlayback(keepMicrophone = true)
+        cueQueue.clear(); cuePlayWhenReady.clear()
+        try { cuePlayer?.stop(); cuePlayer?.release() } catch (_: Exception) {}
+        cuePlayer = null
+        try { tts?.stop() } catch (_: Exception) {}
+        ttsSpeaking = false; lastTtsEndTs = 0
+        listening = true; dictHold = false; micAsleep = false; recActive = true
+        listenStartedAt = System.currentTimeMillis(); micLiveAt = listenStartedAt
+        listenIsResume = false; lastPartial = ""
+        cancelAutoSend(); resetSendWindow()
+        lastActivityTs = listenStartedAt; lastTextTs = listenStartedAt; lastVoiceTs = listenStartedAt
+        conversationStatus = "Ti ascolto · risposta interrotta"
+        LogBus.add("Risposta interrotta dalla voce · continuo la stessa registrazione")
+        updateNotification()
+    }
+
     private fun cancelRemoteSpeech() {
         speechGeneration++
         val old = remoteRecognizer
         remoteRecognizer = null
+        speechDuringPlayback = false
+        recActive = false
         old?.cancel()
     }
 
-    private fun startRemoteSpeech() {
+    private fun startRemoteSpeech(forPlayback: Boolean = false) {
+        if (forPlayback && (!Cfg.bargeIn || !playing || dictHold || Cfg.voiceOff || System.currentTimeMillis() < noAutoWakeUntil)) return
         if (remoteRecognizer != null || pendingSend) return
         try { recognizer?.cancel(); recognizer?.destroy() } catch (_: Exception) {}
         recognizer = null
         val generation = ++speechGeneration
-        conversationStatus = "Collegamento al riconoscimento Claude…"
+        speechDuringPlayback = forPlayback
+        var monitoring = forPlayback
+        var trimFirstSegment = false
+        var interruptedEcho = ""
+        val gate = BargeInGate()
+        if (!forPlayback) conversationStatus = "Collegamento al riconoscimento Claude…"
         recActive = false
         val listener = object : RemoteSpeechRecognizer.Listener {
-            private fun current() = alive && listening && generation == speechGeneration
+            private fun current() = alive && generation == speechGeneration && (listening || (monitoring && playing && Cfg.bargeIn && !dictHold && !Cfg.voiceOff))
+            private fun userText(text: String, final: Boolean): String? {
+                if (monitoring) {
+                    val accepted = gate.accept(text, playbackSpeechText, System.currentTimeMillis(), final) ?: return null
+                    interruptedEcho = playbackSpeechText
+                    monitoring = false
+                    trimFirstSegment = true
+                    beginVoiceInterruption()
+                    return BargeInGate.withoutInterruptCommand(accepted)
+                }
+                return if (trimFirstSegment) BargeInGate.withoutInterruptCommand(BargeInGate.trimEcho(text, interruptedEcho)) else text
+            }
             override fun onReady() {
                 if (!current()) return
                 recActive = true
                 if (micLiveAt == 0L) micLiveAt = System.currentTimeMillis()
-                conversationStatus = "In ascolto · Claude · parla, poi fai una pausa"
+                if (!monitoring) conversationStatus = "In ascolto · Claude · parla, poi fai una pausa"
             }
             override fun onPartial(text: String) {
                 if (!current()) return
-                val t = text.trim()
+                val t = userText(text, false)?.trim() ?: return
                 if (t == lastPartial) return
                 val now = System.currentTimeMillis()
                 lastPartial = t; lastPartialTs = now
@@ -4405,8 +4522,10 @@ class BridgeService : Service() {
             }
             override fun onFinal(text: String) {
                 if (!current()) return
+                val t = userText(text, true) ?: return
+                trimFirstSegment = false
                 lastPartial = ""
-                if (text.isNotBlank()) onFinalText(text)
+                if (t.isNotBlank()) onFinalText(t)
                 // The existing final-text handler arms auto-send. Finalizing a stream
                 // must wait for done instead, otherwise a late endpoint can send twice.
                 if (pendingSend) cancelAutoSend()
@@ -4416,10 +4535,20 @@ class BridgeService : Service() {
                 remoteRecognizer = null
                 recActive = false
                 if (pendingSend) finishPendingSend()
-                else main.postDelayed({ if (current()) startRecognizerCycle() }, 150)
+                else main.postDelayed({
+                    if (current()) {
+                        if (monitoring) startRemoteSpeech(forPlayback = true) else startRecognizerCycle()
+                    }
+                }, 150)
             }
             override fun onError(code: String) {
                 if (!current()) return
+                if (monitoring) {
+                    cancelRemoteSpeech()
+                    bargeInUnavailable = true
+                    LogBus.add("Interruzione vocale non disponibile: $code")
+                    return
+                }
                 // Keep the visible text, but never auto-send an incomplete transcription.
                 val partial = lastPartial.trim()
                 if (partial.isNotEmpty()) draft.append(if (draft.isEmpty()) "" else " ").append(partial)
@@ -4694,7 +4823,7 @@ class BridgeService : Service() {
     // а тап уводил адресата на другое (ревью v0.75).
     fun lastSpokenName(): String {
         val s = lastSession ?: return "—"
-        return SessionBook.all().firstOrNull { it.sid == s }?.proj?.ifEmpty { s.take(8) } ?: s.take(8)
+        return SessionBook.displayName(s, s.take(8))
     }
 
     // v0.73 (слово юзера с поля: «зашёл в раздел прослушать — значит я ГОТОВ СЛУШАТЬ,
@@ -4957,6 +5086,7 @@ class BridgeService : Service() {
         recActive = false   // v0.46: диктовки нет — «датчик мёртв» больше не печатается ложно
         if (!keepButton) stopSilentKeepalive()
         stopHeadsetMic()
+        if (!playing) releaseDuplexAudio()
         updateNotification()
     }
 
@@ -5345,7 +5475,7 @@ class BridgeService : Service() {
             LogBus.add(conversationStatus)
             return
         }
-        conversationStatus = "Invio a ${SessionNameMatcher.displayName(projLabel ?: sid.take(8))}…"
+        conversationStatus = "Invio a ${SessionBook.displayName(sid, projLabel ?: sid.take(8))}…"
         lastOutgoingText = text
         lastOutgoingSid = sid
         val body = JSONObject().put("session_id", sid).put("text", text).toString()

@@ -1,3 +1,15 @@
+## Aggiornamento 1.48-it.5
+
+**Nomi sempre aggiornati.** Il nome della chat viene applicato a tutte le etichette della cronologia, anche ai messaggi precedenti. L’app controlla i nomi ogni cinque secondi mentre è aperta. Non serve riaprire Canali. Il contenuto dei messaggi non viene riscritto.
+
+**Cambio manuale.** Tocca il grande nome della chat in alto oppure **Canali**. Il selettore occupa tutta la schermata: ogni riga è un unico bersaglio grande e la chat attuale è evidenziata. Tocca una riga per scegliere destinatario e conversazione visualizzata.
+
+**Alias locali.** Nel selettore tocca **Alias locali**, poi la sessione; oppure tieni premuto il suo nome. Scrivi un alias e premi **Salva**. Il nome viene usato nell’app, negli annunci e nei comandi come «passa a Documenti». Anche il nome originale resta riconoscibile. Un alias già usato da un’altra sessione viene rifiutato; se un successivo cambio sul PC rende un nome ambiguo, l’app chiede di scegliere invece di cambiare destinatario arbitrariamente. **Usa nome originale** ripristina il nome del PC. Gli alias restano sul telefono e sono legati a quella specifica sessione, non a tutte le chat della stessa cartella.
+
+**Interrompere con la voce.** Con **Claude · via PC**, durante la risposta attendi l’indicazione **Puoi interrompere parlando** e comincia a parlare. L’app interrompe la lettura e continua la stessa registrazione, conservando le prime parole. «Aspetta, controlla invece…» è un altro modo per farlo. Non occorre premere invio: dopo la pausa consueta parte il messaggio. Il testo della risposta interrotta resta nella cronologia. La funzione ferma la lettura sul telefono, non annulla un lavoro già avviato sul PC.
+
+**Controlli.** Il microfono resta attivo durante le risposte per questa funzione. Il pulsante microfono spento disattiva anche l’ascolto durante la riproduzione. Puoi disabilitare **Interrompi parlando** nelle impostazioni avanzate. Questa modalità richiede il riconoscimento Claude; Android e Whisper restano disponibili con l’interruzione manuale. La cancellazione dell’eco dipende dal dispositivo e dagli auricolari: prova la funzione da fermo prima di usarla in mobilità.
+
 ## Aggiornamento 1.48-it.4
 
 Con il relay configurato per Claude, il riconoscimento passa automaticamente a **Claude · via PC**. Attendi **In ascolto** prima di parlare. La bozza si aggiorna mentre parli; dopo circa 6 secondi di pausa l’app completa la trascrizione e invia. Una connessione lenta può aggiungere qualche secondo. Resta possibile dire **«passa a SECURDOC 1»** come frase autonoma.

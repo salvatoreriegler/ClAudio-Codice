@@ -154,13 +154,22 @@ object Feed {
             val old = m[it.msgid]
             // свежая версия сообщения полнее (доехали остальные части) — заменяем
             if (old == null || old.audios.size < it.audios.size || old.text.length < it.text.length) {
-                m[it.msgid] = it
+                m[it.msgid] = it.copy(proj = SessionBook.name(sid, it.proj))
                 changed = true
             }
         }
         while (m.size > 60) m.remove(m.keys.first()).also { changed = true }
         while (inMap.size > 8) inMap.remove(inMap.keys.first()).also { changed = true }
         if (changed) saveIn(ctx)
+    }
+
+    @Synchronized
+    fun renameSession(ctx: Context, sid: String, name: String) {
+        loadIn(ctx)
+        val messages = inMap[sid] ?: return
+        if (name.isBlank() || messages.values.all { it.proj == name }) return
+        for ((id, message) in messages.toMap()) messages[id] = message.copy(proj = name)
+        saveIn(ctx)
     }
 
     @Synchronized

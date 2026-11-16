@@ -3,6 +3,8 @@ package com.vladiko.voicebridge
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import android.os.Handler
 import android.os.Looper
 import okhttp3.*
@@ -25,7 +27,7 @@ class RemoteSpeechRecognizer(
     chatName: String,
     private val muted: () -> Boolean,
     private val listener: Listener,
-    private val source: PcmSource = AndroidPcmSource(Cfg.micVoiceComm)
+    private val source: PcmSource = AndroidPcmSource(Cfg.micVoiceComm || Cfg.bargeIn)
 ) : SpeechInput {
     interface Listener {
         fun onReady()
@@ -148,6 +150,8 @@ class RemoteSpeechRecognizer(
 private class AndroidPcmSource(private val voiceComm: Boolean) : RemoteSpeechRecognizer.PcmSource {
     @Volatile private var recorder: AudioRecord? = null
     @Volatile private var stopped = false
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
     override fun start() {
         if (stopped) return
         val size = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -156,9 +160,20 @@ private class AndroidPcmSource(private val voiceComm: Boolean) : RemoteSpeechRec
             16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(size, 12800))
         recorder = r
         check(r.state == AudioRecord.STATE_INITIALIZED)
+        if (voiceComm) {
+            try {
+                if (AcousticEchoCanceler.isAvailable()) echoCanceler = AcousticEchoCanceler.create(r.audioSessionId)?.apply { enabled = true }
+                if (NoiseSuppressor.isAvailable()) noiseSuppressor = NoiseSuppressor.create(r.audioSessionId)?.apply { enabled = true }
+            } catch (_: Exception) { /* Some devices already apply preprocessing to VOICE_COMMUNICATION. */ }
+        }
         if (!stopped) r.startRecording()
     }
     override fun read(buffer: ByteArray): Int = recorder?.read(buffer, 0, buffer.size) ?: -1
     override fun stop() { stopped = true; try { recorder?.stop() } catch (_: Exception) {} }
-    override fun close() { try { recorder?.release() } catch (_: Exception) {}; recorder = null }
+    override fun close() {
+        try { echoCanceler?.release() } catch (_: Exception) {}
+        try { noiseSuppressor?.release() } catch (_: Exception) {}
+        try { recorder?.release() } catch (_: Exception) {}
+        recorder = null
+    }
 }

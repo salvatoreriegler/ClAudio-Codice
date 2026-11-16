@@ -3,7 +3,7 @@
 - Nome: **ClAudio Codice**.
 - Originale: https://github.com/1nspectorCat/Claudio-Code
 - Commit di partenza: `7de4ec62841859234e12c6529e94b7f9e9d57b99`.
-- Versione: `1.48-it.4`, versionCode 152.
+- Versione: `1.48-it.5`, versionCode 153.
 - Licenza MIT, attribuzione originale a VladiKo preservata.
 
 Il fork è pubblicato su [salvatoreriegler/ClAudio-Codice](https://github.com/salvatoreriegler/ClAudio-Codice), nel ramo `main`. Il remote `origin` punta al fork, mentre `upstream` rimane il riferimento al progetto originale. Il branch locale `italiano` conserva la preparazione iniziale.
@@ -31,3 +31,11 @@ Verificato il protocollo reale con audio italiano sintetico attraverso il relay;
 Il componente `desktop/readback.py` ora usa il nome corrente della sessione nativa, verificando sia l’ID della chat sia il processo proprietario. Un vecchio `customTitle` nel transcript non può sostituire il nome attuale (per esempio «Ricostruzione contesto progetto» al posto di «SECURDOC 1»). Nell’integrazione manuale viene letto l’ultimo titolo del transcript e la cache è separata per sessione, non per cartella di progetto.
 
 È un aggiornamento del componente sul PC, compatibile con l’APK it.4 esistente. Le etichette delle risposte già salvate sul telefono possono conservare il titolo storico; aprire **Canali** aggiorna il nome corrente e la selezione. Cinque test Python verificano deduplicazione, rinomina, riuso dei PID e separazione fra chat; verificato anche l’invio WSL di testo e audio con lo stesso nome corrente.
+
+### 1.48-it.5
+
+Nomi correnti su tutte le etichette della cronologia, aggiornamento dei canali ogni cinque secondi, nomi verificati protetti dagli eventi audio vecchi e alias locali persistenti per ID di sessione. Gli alias sono accettati anche dal parser vocale, con gestione delle ambiguità fra sessioni diverse.
+
+Nuovo selettore a schermo intero con righe da almeno 104 dp. Interruzione della lettura con riconoscimento Claude: microfono e riproduzione contemporanei, cancellazione dell’eco quando disponibile, filtro del testo letto e passaggio alla dettatura senza riavviare la registrazione. Le parti successive della risposta interrotta vengono saltate nella riproduzione; restano nella cronologia. Microfono spento, arresto e fine riproduzione chiudono la registrazione e ripristinano il percorso audio.
+
+Verifiche: test Android/Robolectric di cronologia, aggiornamento automatico, selezione, alias, interruzione, eco, errore microfono e annullamento; controllo visivo di schermata principale e selettore tramite rendering Android. Resta da verificare sul dispositivo fisico la qualità della cancellazione dell’eco e la latenza dell’interruzione.

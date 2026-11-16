@@ -44,6 +44,10 @@ object SessionNameMatcher {
         if (bridgePrefix.containsMatchIn(value.trim())) value.trim().replace(idSuffix, "").replace(bridgePrefix, "")
         else value.trim()
 
+    fun hasOrigin(value: String): Boolean = bridgePrefix.containsMatchIn(value.trim())
+
+    fun sameName(a: String, b: String): Boolean = compact(a) == compact(b)
+
     private fun compact(value: String) = words(value).replace(" ", "")
     private fun numbers(value: String) = digits.findAll(value).map { it.value }.toList()
     private data class Entry(val candidate: Candidate, val title: String, val aliases: Set<String>)
@@ -51,7 +55,7 @@ object SessionNameMatcher {
     fun match(spoken: String, candidates: List<Candidate>): Candidate? {
         val query = compact(spoken)
         if (query.isEmpty()) return null
-        val entries = candidates.distinctBy { it.sid }.map { candidate ->
+        val entries = candidates.distinctBy { it.sid to it.name }.map { candidate ->
             val label = candidate.name.trim()
             val decorated = bridgePrefix.containsMatchIn(label)
             val withoutId = if (decorated) label.replace(idSuffix, "") else label
@@ -62,11 +66,11 @@ object SessionNameMatcher {
         // Full names win over partial names, so Dashboard and Dashboard (fork)
         // remain distinct. Identical names in two sessions require clarification.
         val exact = entries.filter { query in it.aliases }
-        if (exact.isNotEmpty()) return exact.singleOrNull()?.candidate
+        if (exact.isNotEmpty()) return exact.distinctBy { it.candidate.sid }.singleOrNull()?.candidate
 
         val phrase = " ${words(spoken)} "
         val partial = entries.filter { " ${it.title} ".contains(phrase) }
-        if (partial.isNotEmpty()) return partial.singleOrNull()?.candidate
+        if (partial.isNotEmpty()) return partial.distinctBy { it.candidate.sid }.singleOrNull()?.candidate
 
         if (query.length < 4) return null
         val ranked = entries.mapNotNull { entry ->
@@ -74,7 +78,7 @@ object SessionNameMatcher {
             // Never turn "SECURDOC 2" into "SECURDOC 1" through typo tolerance.
             if (title.isEmpty() || numbers(query) != numbers(title)) null
             else entry to distance(query, title).toDouble() / maxOf(query.length, title.length)
-        }.sortedBy { it.second }
+        }.sortedBy { it.second }.distinctBy { it.first.candidate.sid }
         val best = ranked.firstOrNull() ?: return null
         if (best.second > 0.25) return null
         if (ranked.size > 1 && ranked[1].second - best.second < 0.15) return null

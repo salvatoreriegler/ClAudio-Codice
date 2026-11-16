@@ -16,6 +16,15 @@ Fork italiano di [Claudio Code di 1nspectorCat / VladiKo](https://github.com/1ns
 
 Questa prima edizione traduce il percorso principale. I registri tecnici e le schermate sperimentali dell'hub conservano parte dei testi inglesi; commenti e documentazione interna ereditati possono essere in russo. Il server dell'hub multi-provider non è incluso nell'upstream: questa versione collega le sessioni di **Claude Code**.
 
+## Nomi, alias e interruzione vocale (1.48-it.5)
+
+- Il nome corrente della sessione viene mostrato anche sui messaggi già salvati. L’elenco si aggiorna ogni cinque secondi mentre l’app è aperta, senza aprire Canali; i vecchi eventi audio non sovrascrivono il nome verificato.
+- Tocca il grande selettore in alto oppure **Canali**: si apre una schermata dedicata con righe da almeno 104 dp, nomi grandi e chat selezionata evidenziata.
+- **Canali → Alias locali → chat** permette di scegliere un nome da usare su questo telefono. Puoi anche tenere premuto il nome della chat. L’alias appare nella cronologia e funziona con «passa a Documenti», per esempio. **Usa nome originale** lo rimuove. Il nome sul PC resta invariato; l’alias è associato all’ID della sessione e non viene trasferito a fork o chat nuove.
+- Con riconoscimento Claude e **Interrompi parlando** attivo, puoi parlare durante la lettura della risposta. Quando la voce viene riconosciuta, la lettura si ferma e le prime parole restano nella bozza. Puoi anche dire «aspetta» o «stop» e continuare. La risposta interrotta resta nella cronologia.
+
+Durante questa modalità il microfono resta attivo anche mentre l’app legge. L’app usa cancellazione dell’eco Android, uscita audio di comunicazione e confronto con il testo letto. Il controllo **microfono spento** interrompe anche questo ascolto. **Interrompi parlando**, nelle impostazioni avanzate, è disattivabile; le modalità Android/Whisper mantengono il comportamento precedente. La reattività dipende da rete, microfono e auricolari: i test automatici non sostituiscono la verifica sul telefono.
+
 ## Riconoscimento Claude (1.48-it.4)
 
 Il relay può usare il servizio di dettatura di Claude Code con l’accesso Claude già presente sul PC. L’audio viene trasmesso ad Anthropic; le credenziali restano sul PC. Le parole provvisorie appaiono a schermo e vengono corrette prima dell’invio. I nomi delle chat disponibili vengono passati come suggerimenti al riconoscitore. Non serve una GPU locale.
@@ -30,7 +39,7 @@ Configura e avvia l’app da fermo. Apri **Canali** e tocca il nome della chat: 
 
 Le parole riconosciute appaiono subito nella bozza a schermo. Dopo l’invio, il messaggio resta nella conversazione; gli errori sono visibili. Se manca una chat, la bozza viene conservata. Le righe dei canali sono grandi e mostrano il nome senza prefissi tecnici.
 
-Con relay e hook aggiornati, il testo della risposta arriva prima della sintesi vocale. L’audio parte automaticamente; il riconoscimento si sospende durante la riproduzione per non ritrascriverla. **Mani libere** è disattivabile dalla schermata principale. Il riconoscimento continuo usa microfono e batteria finché non lo metti in pausa o interrompi la comunicazione.
+Con relay e hook aggiornati, il testo della risposta arriva prima della sintesi vocale. L’audio parte automaticamente. Con Claude e **Interrompi parlando**, l’app ascolta anche durante la risposta; altrimenti sospende il riconoscimento durante la riproduzione. **Mani libere** è disattivabile dalla schermata principale. Il riconoscimento continuo usa microfono e batteria finché non lo metti in pausa o interrompi la comunicazione.
 
 ## Comandi vocali
 
