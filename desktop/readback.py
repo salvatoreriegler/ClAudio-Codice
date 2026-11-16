@@ -196,6 +196,66 @@ def push_text(cfg, sid, proj, text, msgid, ctx):
         return False
 
 
+def channel_title(payload, transcript_path):
+    """Use the live session name, never an old title shared by a project folder."""
+    sid = str(payload.get("session_id") or "")
+    valid_sid = bool(re.fullmatch(r"[A-Za-z0-9_-]{1,128}", sid))
+    fallback = os.path.basename(payload.get("cwd") or "") or ""
+    if valid_sid:
+        try:
+            with open(os.path.join(DIR, "native", sid + ".json"), encoding="utf-8") as f:
+                native = json.load(f)
+            if native.get("session_id") == sid:
+                title = str(native.get("title") or "").strip()
+                # Public metadata is updated when the user renames the VS Code chat.
+                # Do not inspect socket credentials or session *.key files.
+                pid = native.get("owner_pid")
+                if isinstance(pid, int) and pid > 0:
+                    try:
+                        with open(os.path.join(os.path.dirname(DIR), "sessions", str(pid) + ".json"), encoding="utf-8") as f:
+                            current = json.load(f)
+                        name = current.get("name")
+                        if current.get("pid") == pid and current.get("sessionId") == sid and isinstance(name, str) and name.strip():
+                            origin = title.split(" - ", 1)[0] if " - " in title else "Claude"
+                            name = re.sub(r"\s+", " ", name).strip()
+                            suffix = " [%s]" % sid[:8]
+                            title = origin + " - " + name[:max(1, 100 - len(origin) - 3 - len(suffix))] + suffix
+                    except (OSError, ValueError, TypeError):
+                        pass
+                if title:
+                    return title[:100]
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+
+    # Legacy/manual integration: the LAST title wins, including renames after the
+    # first 80 transcript lines. Cache per SID so parallel chats cannot rename each other.
+    title = ""
+    try:
+        with open(transcript_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    item = json.loads(line)
+                    candidate = item.get("customTitle")
+                    if isinstance(candidate, str) and candidate.strip():
+                        title = candidate.strip()[:100]
+                except (ValueError, AttributeError):
+                    continue
+    except OSError:
+        pass
+    cache = os.path.join(DIR, "bridge", "session_title_%s.txt" % sid) if valid_sid else None
+    if cache:
+        try:
+            if title:
+                with open(cache, "w", encoding="utf-8") as f:
+                    f.write(title)
+            else:
+                with open(cache, encoding="utf-8") as f:
+                    title = f.read(100).strip()
+        except OSError:
+            pass
+    return title or fallback
+
+
 def main():
     if not os.path.exists(TOGGLE):
         return
@@ -220,50 +280,7 @@ def main():
     if not tpath or not os.path.exists(tpath):
         log("no transcript"); return
     sid = payload.get("session_id") or ""
-    proj = os.path.basename(payload.get("cwd") or "") or ""
-
-    # Channel name: if you gave the session a custom title in Claude Code, the radio should
-    # call the channel exactly that — otherwise the names on the phone do not match what you
-    # see on screen. Falls back to the working directory name. Never let this break readback.
-    try:
-        # customTitle is NOT necessarily on the first line of the transcript, so scan the
-        # head of the file; a first-line-only check silently fell back to the folder name.
-        _title = ""
-        with open(tpath, encoding="utf-8") as _fh:
-            for _i, _ln in enumerate(_fh):
-                if _i > 80:
-                    break
-                try:
-                    _o = json.loads(_ln)
-                except Exception:
-                    continue
-                _t = (_o.get("customTitle") or "").strip()
-                if _t:
-                    _title = _t
-                    break
-        # After /clear, Claude Code starts a NEW transcript file that has no title yet — the
-        # channel would suddenly rename itself to the folder name mid-conversation. Remember
-        # the last known title per working directory.
-        import re as _re2
-        _slug = _re2.sub(r"[^A-Za-z0-9_-]", "-", payload.get("cwd") or "noproj")
-        _nf = os.path.join(DIR, "bridge", "title_%s.txt" % _slug)
-        if _title:
-            proj = _title[:40]
-            try:
-                with open(_nf, "w", encoding="utf-8") as _w:
-                    _w.write(proj)
-            except Exception:
-                pass
-        else:
-            try:
-                with open(_nf, encoding="utf-8") as _r:
-                    _prev = _r.read().strip()
-                if _prev:
-                    proj = _prev[:40]
-            except Exception:
-                pass
-    except Exception:
-        pass
+    proj = channel_title(payload, tpath)
 
     # A session id CHANGES when the context is compacted: the answer goes out under the new
     # id while the session's poller is still listening on the old one, and the user's replies

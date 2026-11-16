@@ -25,3 +25,9 @@ Corregge la visibilità del servizio di riconoscimento su Android 11+, la selezi
 Aggiunge riconoscimento Claude in italiano: PCM 16 kHz mono dal telefono al relay autenticato e poi al servizio vocale Anthropic. Le credenziali OAuth vengono lette sul PC per ogni nuova connessione, così i cambi di account sono recepiti senza copiarle sul telefono. Le bozze vengono conservate se la rete o l’accesso falliscono. L’invio attende l’ultima correzione della trascrizione; i comandi vocali continuano a usare lo stesso parser e destinatario della it.3.
 
 Verificato il protocollo reale con audio italiano sintetico attraverso il relay; test automatici coprono trasporto PCM, annullamento, errori, invio automatico e cambio canale. La qualità con il microfono del telefono e rumore ambientale richiede una prova sul dispositivo. Nessuna registrazione PCM viene salvata da questa integrazione nel telefono o nel relay.
+
+### Correzione desktop dei nomi delle chat
+
+Il componente `desktop/readback.py` ora usa il nome corrente della sessione nativa, verificando sia l’ID della chat sia il processo proprietario. Un vecchio `customTitle` nel transcript non può sostituire il nome attuale (per esempio «Ricostruzione contesto progetto» al posto di «SECURDOC 1»). Nell’integrazione manuale viene letto l’ultimo titolo del transcript e la cache è separata per sessione, non per cartella di progetto.
+
+È un aggiornamento del componente sul PC, compatibile con l’APK it.4 esistente. Le etichette delle risposte già salvate sul telefono possono conservare il titolo storico; aprire **Canali** aggiorna il nome corrente e la selezione. Cinque test Python verificano deduplicazione, rinomina, riuso dei PID e separazione fra chat; verificato anche l’invio WSL di testo e audio con lo stesso nome corrente.
