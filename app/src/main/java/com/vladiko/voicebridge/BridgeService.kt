@@ -749,6 +749,9 @@ class BridgeService : Service() {
 
     // Имена проектов приходят слагами (voicebridge_app) — озвучка читает подчёркивания вслух.
     private fun spoken(n: String) = n.replace('_', ' ').replace('-', ' ')
+        // This project name is a word, not an acronym. Only alter TTS input;
+        // the visible name, local alias and voice-command matching stay intact.
+        .replace(Regex("\\bSECURDOC\\b", RegexOption.IGNORE_CASE), "Securdoc")
 
     // Произнести произвольную фразу громким путём: есть файл — играем, нет — синтезируем
     // и играем по готовности (см. onDone у cuefile_).

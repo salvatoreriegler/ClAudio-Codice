@@ -16,6 +16,12 @@ Fork italiano di [Claudio Code di 1nspectorCat / VladiKo](https://github.com/1ns
 
 Questa prima edizione traduce il percorso principale. I registri tecnici e le schermate sperimentali dell'hub conservano parte dei testi inglesi; commenti e documentazione interna ereditati possono essere in russo. Il server dell'hub multi-provider non è incluso nell'upstream: questa versione collega le sessioni di **Claude Code**.
 
+## Risposte senza annuncio del canale (1.48-it.6)
+
+Il nome del canale non viene più ripetuto prima di ogni risposta, anche aggiornando una versione precedente. Resta visibile sullo schermo; la conferma vocale quando cambi chat rimane attiva. Puoi riabilitare il prefisso da **Impostazioni → annuncia il canale prima della risposta**: la scelta viene conservata.
+
+Nei nomi pronunciati, `SECURDOC` viene passato alla sintesi come `Securdoc` per evitare che il tutto maiuscolo venga interpretato come un acronimo. Nomi visualizzati e alias restano invariati; la pronuncia finale dipende dalla voce Android installata.
+
 ## Nomi, alias e interruzione vocale (1.48-it.5)
 
 - Il nome corrente della sessione viene mostrato anche sui messaggi già salvati. L’elenco si aggiorna ogni cinque secondi mentre l’app è aperta, senza aprire Canali; i vecchi eventi audio non sovrascrivono il nome verificato.

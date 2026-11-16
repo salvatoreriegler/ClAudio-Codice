@@ -25,7 +25,7 @@ object Cfg {
     // и не хочу лазить в настройки»): режим сам следует за гарнитурой. Наушники есть —
     // звук идёт в них; наушников нет — играем вслух, ничего не копим.
     var autoRoute = true
-    var announceProj = true // say the project name before a new session speaks
+    var announceProj = false // optional channel prefix before each reply
     var catchup = true      // on connect, replay messages missed in the last 30 min
     var speed = 1.0f        // playback speed (1.0..2.0)
     var replyTarget = ""    // "" = reply to the last played session
@@ -78,7 +78,13 @@ object Cfg {
         btMic = p.getBoolean("btMic", true)
         onlyHeadset = p.getBoolean("onlyHeadset", false)
         autoRoute = p.getBoolean("autoRoute", true)
-        announceProj = p.getBoolean("announceProj", true)
+        // Stop the inherited per-message announcements on upgrade as well as fresh
+        // installs. A later explicit opt-in in Settings survives subsequent loads.
+        if (!p.getBoolean("quietChannelMigration154", false)) {
+            p.edit().putBoolean("announceProj", false)
+                .putBoolean("quietChannelMigration154", true).apply()
+        }
+        announceProj = p.getBoolean("announceProj", false)
         catchup = p.getBoolean("catchup", true)
         speed = p.getFloat("speed", 1.0f)
         replyTarget = p.getString("replyTarget", "") ?: ""

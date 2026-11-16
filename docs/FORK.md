@@ -3,7 +3,7 @@
 - Nome: **ClAudio Codice**.
 - Originale: https://github.com/1nspectorCat/Claudio-Code
 - Commit di partenza: `7de4ec62841859234e12c6529e94b7f9e9d57b99`.
-- Versione: `1.48-it.5`, versionCode 153.
+- Versione: `1.48-it.6`, versionCode 154.
 - Licenza MIT, attribuzione originale a VladiKo preservata.
 
 Il fork è pubblicato su [salvatoreriegler/ClAudio-Codice](https://github.com/salvatoreriegler/ClAudio-Codice), nel ramo `main`. Il remote `origin` punta al fork, mentre `upstream` rimane il riferimento al progetto originale. Il branch locale `italiano` conserva la preparazione iniziale.
@@ -39,3 +39,7 @@ Nomi correnti su tutte le etichette della cronologia, aggiornamento dei canali o
 Nuovo selettore a schermo intero con righe da almeno 104 dp. Interruzione della lettura con riconoscimento Claude: microfono e riproduzione contemporanei, cancellazione dell’eco quando disponibile, filtro del testo letto e passaggio alla dettatura senza riavviare la registrazione. Le parti successive della risposta interrotta vengono saltate nella riproduzione; restano nella cronologia. Microfono spento, arresto e fine riproduzione chiudono la registrazione e ripristinano il percorso audio.
 
 Verifiche: test Android/Robolectric di cronologia, aggiornamento automatico, selezione, alias, interruzione, eco, errore microfono e annullamento; controllo visivo di schermata principale e selettore tramite rendering Android. Resta da verificare sul dispositivo fisico la qualità della cancellazione dell’eco e la latenza dell’interruzione.
+
+### 1.48-it.6
+
+Disattiva il prefisso vocale del canale prima di ogni risposta, con migrazione una tantum delle preferenze esistenti. L’opzione resta disponibile e un’eventuale riattivazione successiva viene conservata. La conferma al cambio destinatario resta attiva. Normalizza `SECURDOC` in `Securdoc` soltanto nei nomi inviati alla sintesi vocale Android, preservando etichette, alias e riconoscimento dei comandi.

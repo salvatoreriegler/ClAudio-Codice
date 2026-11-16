@@ -1,3 +1,9 @@
+## Aggiornamento 1.48-it.6
+
+Le risposte partono senza ripetere ogni volta il nome del canale. La modifica si applica anche installando l’aggiornamento sopra una versione precedente. Il nome resta visibile e il cambio chat conserva la sua conferma vocale. Se vuoi gli annunci, attiva **Impostazioni → annuncia il canale prima della risposta**; la tua scelta successiva viene mantenuta.
+
+Per la sola sintesi vocale, `SECURDOC` viene scritto `Securdoc`, così il maiuscolo non suggerisce una lettura come acronimo. Il nome sullo schermo non cambia; la resa finale dipende dalla voce Android.
+
 ## Aggiornamento 1.48-it.5
 
 **Nomi sempre aggiornati.** Il nome della chat viene applicato a tutte le etichette della cronologia, anche ai messaggi precedenti. L’app controlla i nomi ogni cinque secondi mentre è aperta. Non serve riaprire Canali. Il contenuto dei messaggi non viene riscritto.
