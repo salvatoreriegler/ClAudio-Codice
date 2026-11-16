@@ -9,6 +9,7 @@ const WebSocket = require('ws');
 
 const DIR = __dirname;
 const CFG = JSON.parse(fs.readFileSync(path.join(DIR, 'config.json'), 'utf8'));
+const speechBridge = require('./claude-stt').createSpeechBridge(CFG.stt);
 const AUDIO_DIR = path.join(DIR, 'audio');
 const UTT_DIR = path.join(DIR, 'utt');   // raw dictation segments awaiting whisper
 const LOG = path.join(DIR, 'relay.log');
@@ -659,7 +660,10 @@ wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x');
   if (!authOk(url)) { ws.close(4001, 'bad token'); return; }
   const role = url.searchParams.get('role');
-  if (role === 'session') {
+  if (role === 'stt') {
+    speechBridge.connect(ws, (url.searchParams.get('name') || '').slice(0,800));
+    return;
+  } else if (role === 'session') {
     const sid = url.searchParams.get('session');
     if (!sid) { ws.close(4002, 'need session'); return; }
     if (!sessions.has(sid)) sessions.set(sid, new Set());
@@ -675,7 +679,7 @@ wss.on('connection', (ws, req) => {
     log(`phone connected (${phones.size})`);
     // v0.36: server clock in hello — the phone computes the 30-min catchup window
     // against server timestamps, so skewed phone clocks no longer break catchup
-    try { ws.send(JSON.stringify({ type: 'hello', now: Date.now(), recent: recent.slice(-10) })); } catch (_) {}
+    try { ws.send(JSON.stringify({ type: 'hello', now: Date.now(), recent: recent.slice(-10), stt: speechBridge.enabled ? 'claude' : null })); } catch (_) {}
     ws.on('close', () => { phones.delete(ws); log('phone disconnected'); });
   } else {
     ws.close(4003, 'bad role');

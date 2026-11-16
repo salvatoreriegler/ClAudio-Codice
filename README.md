@@ -9,12 +9,20 @@ Fork italiano di [Claudio Code di 1nspectorCat / VladiKo](https://github.com/1ns
 
 - Nome dell'app: **ClAudio Codice**.
 - Schermata principale, canali, configurazione e avvisi vocali in italiano.
-- Riconoscimento Android `it-IT`; Whisper impostato su `it`.
+- Riconoscimento Claude in streaming tramite il PC, in italiano; Android e Whisper restano disponibili.
 - Voce desktop italiana `it-IT-DiegoNeural`, modificabile nella configurazione.
-- Cambio sessione a voce sia con Android sia con Whisper.
+- Cambio sessione a voce con Claude, Android e Whisper.
 - Identificativo Android `it.claudiocodice.app` e link `claudio-codice://setup` dedicati: può essere installata accanto all'originale.
 
 Questa prima edizione traduce il percorso principale. I registri tecnici e le schermate sperimentali dell'hub conservano parte dei testi inglesi; commenti e documentazione interna ereditati possono essere in russo. Il server dell'hub multi-provider non è incluso nell'upstream: questa versione collega le sessioni di **Claude Code**.
+
+## Riconoscimento Claude (1.48-it.4)
+
+Il relay può usare il servizio di dettatura di Claude Code con l’accesso Claude già presente sul PC. L’audio viene trasmesso ad Anthropic; le credenziali restano sul PC. Le parole provvisorie appaiono a schermo e vengono corrette prima dell’invio. I nomi delle chat disponibili vengono passati come suggerimenti al riconoscitore. Non serve una GPU locale.
+
+È un’integrazione **non ufficiale**, basata sul protocollo del client Claude Code, che Anthropic può modificare. Esistono precedenti pubblici: [prova di concetto originale](https://gist.github.com/byt3bl33d3r/061dad31daa37b1d81dfa8cc67d45168) e [integrazione in Handy](https://github.com/cjpais/Handy/discussions/1033). La [documentazione ufficiale della dettatura](https://code.claude.com/docs/en/voice-dictation) descrive requisiti e trattamento dell’audio.
+
+Vedi [configurazione del riconoscimento](docs/SETUP.md#riconoscimento-claude-tramite-il-pc). L’app mostra **Claude · via PC** quando il relay lo abilita. In caso di errore conserva la bozza e ferma l’invio; non passa silenziosamente ad Android. Per scegliere Android, disattiva **Riconoscimento Claude** nelle impostazioni avanzate. Su relay privi della funzionalità resta il comportamento precedente.
 
 ## Conversazione dal telefono (1.48-it.3)
 

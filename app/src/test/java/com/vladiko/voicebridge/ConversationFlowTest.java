@@ -146,4 +146,70 @@ public class ConversationFlowTest {
         assertTrue(xml.contains("android.speech.RecognitionService"));
         assertTrue(xml.contains("android.intent.action.TTS_SERVICE"));
     }
+
+    private static class FakeSpeech implements SpeechInput {
+        RemoteSpeechRecognizer.Listener listener;
+        boolean finished, cancelled, started;
+        public void start(){started=true;listener.onReady();}
+        public void finish(){finished=true;}
+        public void cancel(){cancelled=true;}
+    }
+    private FakeSpeech remote()throws Exception {
+        set(service,"audioManager",ctx.getSystemService(Context.AUDIO_SERVICE));
+        set(service,"claudeSpeechAvailable",true);
+        set(service,"listening",true);
+        FakeSpeech fake=new FakeSpeech();
+        set(service,"speechFactory",(kotlin.jvm.functions.Function1<RemoteSpeechRecognizer.Listener,SpeechInput>)listener->{fake.listener=listener;return fake;});
+        call(service,"startRemoteSpeech",new Class[]{});
+        assertTrue(fake.started);assertTrue(service.recognitionEngineName().contains("Claude"));
+        return fake;
+    }
+    @Test public void claudeWaitsForFinalCorrectionBeforeSendingToChosenChat()throws Exception {
+        startServer();server.enqueue(new MockResponse().setBody("{\"ok\":true}"));
+        Cfg.INSTANCE.setReplyTarget("securdoc-1");
+        FakeSpeech fake=remote();
+        fake.listener.onPartial("Controlla i contatti");
+        assertEquals("Controlla i contatti",service.liveTranscript());
+        service.sendNow();assertTrue(fake.finished);
+        assertNull(server.takeRequest(100,TimeUnit.MILLISECONDS));
+        fake.listener.onPartial("Controlla i contratti");
+        fake.listener.onFinal("Controlla i contratti");fake.listener.onDone();
+        RecordedRequest request=server.takeRequest(5,TimeUnit.SECONDS);assertNotNull(request);
+        JSONObject body=new JSONObject(request.getBody().readUtf8());
+        assertEquals("securdoc-1",body.getString("session_id"));
+        assertEquals("Controlla i contratti",body.getString("text"));
+        fake.listener.onFinal("Evento tardivo");
+        assertEquals("",service.liveTranscript());
+    }
+    @Test public void claudeAutoSendFinalizesWithoutATap()throws Exception {
+        startServer();server.enqueue(new MockResponse().setBody("{\"ok\":true}"));
+        Cfg.INSTANCE.setReplyTarget("securdoc-1");Cfg.INSTANCE.setAutoSend(true);
+        FakeSpeech fake=remote();fake.listener.onPartial("Rispondi solo prova ricevuta");
+        set(service,"lastActivityTs",System.currentTimeMillis()-7000);
+        set(service,"lastTextTs",System.currentTimeMillis()-7000);
+        set(service,"lastVoiceTs",System.currentTimeMillis()-7000);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(6));
+        assertTrue(fake.finished);assertNull(server.takeRequest(100,TimeUnit.MILLISECONDS));
+        fake.listener.onFinal("Rispondi solo prova ricevuta.");fake.listener.onDone();
+        RecordedRequest request=server.takeRequest(5,TimeUnit.SECONDS);assertNotNull(request);
+        assertEquals("Rispondi solo prova ricevuta.",new JSONObject(request.getBody().readUtf8()).getString("text"));
+    }
+    @Test public void claudeFailureKeepsAllWordsAndCancelsAutomaticSend()throws Exception {
+        Cfg.INSTANCE.setAutoSend(true);FakeSpeech fake=remote();
+        fake.listener.onFinal("Controlla il documento");
+        fake.listener.onPartial("e la firma");fake.listener.onError("connection_lost");
+        assertFalse(service.isListening());assertTrue(fake.cancelled);
+        assertEquals("Controlla il documento e la firma",service.liveTranscript());
+        assertTrue(service.getConversationStatus().startsWith("Non inviato"));
+        assertNull(get(service,"autoSendTimer"));
+        fake.listener.onFinal("Questo evento vecchio va ignorato");
+        assertEquals("Controlla il documento e la firma",service.liveTranscript());
+    }
+    @Test public void claudeVoiceCommandChangesChannelWithoutBecomingAPrompt()throws Exception {
+        SessionBook.INSTANCE.seen(ctx,"securdoc-1","Claude WSL Ubuntu - SECURDOC 1 [98f0e69c]",1);
+        Cfg.INSTANCE.setReplyTarget("another-chat");FakeSpeech fake=remote();
+        fake.listener.onPartial("Passa a SECURDOC 1.");fake.listener.onFinal("Passa a SECURDOC 1.");
+        assertEquals("securdoc-1",Cfg.INSTANCE.getReplyTarget());
+        assertEquals("",service.liveTranscript());assertTrue(fake.cancelled);
+    }
 }

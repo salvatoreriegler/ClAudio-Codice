@@ -13,7 +13,7 @@ test('real relay publishes text before audio and rejects malformed/unauthorized 
   probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'claudio-relay-test-'));
-  fs.copyFileSync(path.join(__dirname, '../relay.js'), path.join(dir, 'relay.js'));
+  for(const file of ['relay.js','claude-stt.js']) fs.copyFileSync(path.join(__dirname, '..',file),path.join(dir,file));
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({port, token:'test-only-token'}));
   const child = spawn(process.execPath, [path.join(dir, 'relay.js')], {
     env: {...process.env, NODE_PATH:path.resolve(__dirname, '../node_modules')}, stdio:'ignore', windowsHide:true
@@ -32,6 +32,8 @@ test('real relay publishes text before audio and rejects malformed/unauthorized 
     assert.ok(ready, 'relay starts');
     phone = new WebSocket(`ws://127.0.0.1:${port}/?role=phone&token=test-only-token`);
     const events=[]; phone.on('message', b=>events.push(JSON.parse(b.toString()))); await once(phone,'open');
+    const rejected = new WebSocket(`ws://127.0.0.1:${port}/?role=stt&token=invalid`);
+    await assert.rejects(once(rejected,'open'), /401/);
     const reply={session:'session-a',msgid:'reply-1',proj:'SECURDOC 1',text:'Risposta completa: città e caffè.'};
     assert.equal((await post('/reply',reply,'invalid')).status,401);
     assert.equal((await post('/reply',{...reply,session:'../bad'})).status,400);

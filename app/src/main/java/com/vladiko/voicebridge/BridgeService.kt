@@ -163,6 +163,22 @@ class BridgeService : Service() {
     private lateinit var http: OkHttpClient        // audio download + /say (bounded timeouts)
     private var ws: WebSocket? = null
     private var wsUp = false
+    private var claudeSpeechAvailable = false
+    private var remoteRecognizer: SpeechInput? = null
+    private var speechGeneration = 0
+    private var speechFactory: (RemoteSpeechRecognizer.Listener) -> SpeechInput = { listener ->
+        RemoteSpeechRecognizer(Net.client(Cfg.pin), Cfg.url, Cfg.token,
+            (listOf(replyTargetName()) + SessionBook.all().map { it.proj })
+                .map { SessionNameMatcher.displayName(it) }.distinct().take(12).joinToString("|").take(800),
+            { ttsGateActive() || playing || paused }, listener)
+    }
+    private fun useClaudeSpeech() = !Cfg.whisper && Cfg.claudeSpeech && claudeSpeechAvailable
+    fun recognitionEngineName(): String = when {
+        Cfg.whisper -> "Whisper"
+        useClaudeSpeech() -> "Claude · via PC"
+        else -> "Android"
+    }
+
     private var announcedLink: Boolean? = null   // v0.26: чтобы не повторять «на связи» на каждый реконнект
     private var reconnectDelay = 3000L
 
@@ -1929,7 +1945,7 @@ class BridgeService : Service() {
     fun sendNow() {
         touchUser()
         if (!listening) { LogBus.add(tr("нечего отправлять — диктовка не идёт", "nothing to send — no dictation in progress")); return }
-        if (Cfg.whisper) { beginSend(); return }
+        if (Cfg.whisper || remoteRecognizer != null) { beginSend(); return }
         var msg = draft.toString().trim()
         // v0.30/v0.46-fix: финала нет, но догадка свежая — шлём её. У ручной отправки СВОЁ окно
         // (20с, PARTIAL_BTN_FRESH_MS): юзер жмёт осознанно после паузы на раздумье, 8с теряли текст.
@@ -1978,7 +1994,7 @@ class BridgeService : Service() {
     // 100-200мс ветра, а не речь. Речью считаем то же, что и статус экрана: от 600мс,
     // либо живой голос ПРЯМО СЕЙЧАС (< 2.5с назад, а не 5).
     private fun speechInFlight(): Boolean =
-        draft.isNotEmpty() ||
+        draft.isNotEmpty() || lastPartial.isNotEmpty() ||
             (Cfg.whisper && uttId.isNotEmpty() &&
                 (uttSpeechMs + segLiveMs > 600 || (recThread != null && System.currentTimeMillis() - lastVoiceTs < 2500)))
 
@@ -2013,6 +2029,8 @@ class BridgeService : Service() {
                 // закрываем utt пустым финальным сегментом сами
                 if (recThread != null) finalizeReq = true
                 else { uploadSeg(ByteArray(0), true); uttId = ""; uttSpeechMs = 0 }
+            } else if (remoteRecognizer != null) {
+                beginSend()
             } else {
                 pendingSend = true
                 finishPendingSend()   // проверенный путь: гасит таймер, чистит догадку и окно
@@ -2026,6 +2044,9 @@ class BridgeService : Service() {
     }
 
     private fun applyTarget(sid: String) {
+        // Stop the old audio stream before announcing a new target; refresh its hints.
+        val restartSpeech = remoteRecognizer != null && listening
+        if (restartSpeech) cancelRemoteSpeech()
         Cfg.replyTarget = sid
         targetEpoch++
         manualPinTs = System.currentTimeMillis()
@@ -2040,6 +2061,7 @@ class BridgeService : Service() {
         say(tr("отвечаю в ", "replying to ", "rispondo a ") + spoken(n))
         // имя адресата уже прозвучало — реплика подъёма микрофона повторила бы его же
         suppressListenCueUntil = System.currentTimeMillis() + 8000
+        if (restartSpeech) main.postDelayed({ if (alive && listening) startRecognizerCycle() }, 500)
     }
 
     // utt = чей финал пришёл. Применяем только своё ожидание: подтверждение ПРОШЛОГО
@@ -2412,6 +2434,12 @@ class BridgeService : Service() {
         }
         if (pendingSend) return
         pendingSend = true
+        if (remoteRecognizer != null) {
+            cancelAutoSend()
+            conversationStatus = "Completo la trascrizione · Claude"
+            remoteRecognizer?.finish()
+            return
+        }
         try { recognizer?.stopListening() } catch (_: Exception) {}
         main.postDelayed(flushSend, 2000L)
     }
@@ -2590,6 +2618,13 @@ class BridgeService : Service() {
                 if (sid == replyTargetSid()) conversationStatus = "Risposta ricevuta · preparo l’audio"
             }
             "hello" -> {
+                val wasClaude = useClaudeSpeech()
+                claudeSpeechAvailable = o.optString("stt") == "claude"
+                if (!wasClaude && useClaudeSpeech() && listening && liveTranscript().isEmpty()) {
+                    try { recognizer?.cancel(); recognizer?.destroy() } catch (_: Exception) {}
+                    recognizer = null
+                    startRecognizerCycle()
+                }
                 LogBus.add(tr("релей на связи", "relay is online"))
                 // catch up on missed messages: never older than 30 min, dedup by ts
                 if (!Cfg.catchup) return
@@ -3728,7 +3763,7 @@ class BridgeService : Service() {
         grabMediaButtons()   // v0.7: слушание = рабочий режим, кнопка наушников должна быть нашей
         // v0.36: проверка нужна ТОЛЬКО пути SpeechRecognizer — whisper пишет звук сам,
         // и на устройстве без сервисов Google он обязан работать
-        if (!Cfg.whisper && !SpeechRecognizer.isRecognitionAvailable(this)) {
+        if (!Cfg.whisper && !useClaudeSpeech() && !SpeechRecognizer.isRecognitionAvailable(this)) {
             conversationStatus = "Riconoscimento vocale non disponibile: controlla il servizio vocale di Android"
             LogBus.add(tr("распознавание речи недоступно на этом устройстве", "speech recognition is unavailable on this device"))
             return
@@ -4335,6 +4370,78 @@ class BridgeService : Service() {
         })
     }
 
+    private fun cancelRemoteSpeech() {
+        speechGeneration++
+        val old = remoteRecognizer
+        remoteRecognizer = null
+        old?.cancel()
+    }
+
+    private fun startRemoteSpeech() {
+        if (remoteRecognizer != null || pendingSend) return
+        try { recognizer?.cancel(); recognizer?.destroy() } catch (_: Exception) {}
+        recognizer = null
+        val generation = ++speechGeneration
+        conversationStatus = "Collegamento al riconoscimento Claude…"
+        recActive = false
+        val listener = object : RemoteSpeechRecognizer.Listener {
+            private fun current() = alive && listening && generation == speechGeneration
+            override fun onReady() {
+                if (!current()) return
+                recActive = true
+                if (micLiveAt == 0L) micLiveAt = System.currentTimeMillis()
+                conversationStatus = "In ascolto · Claude · parla, poi fai una pausa"
+            }
+            override fun onPartial(text: String) {
+                if (!current()) return
+                val t = text.trim()
+                if (t == lastPartial) return
+                val now = System.currentTimeMillis()
+                lastPartial = t; lastPartialTs = now
+                if (t.isNotEmpty()) {
+                    lastActivityTs = now; lastTextTs = now; lastVoiceTs = now
+                    if (!pendingSend && autoSendTimer == null && Cfg.handsFree && Cfg.autoSend) scheduleAutoSend()
+                }
+            }
+            override fun onFinal(text: String) {
+                if (!current()) return
+                lastPartial = ""
+                if (text.isNotBlank()) onFinalText(text)
+                // The existing final-text handler arms auto-send. Finalizing a stream
+                // must wait for done instead, otherwise a late endpoint can send twice.
+                if (pendingSend) cancelAutoSend()
+            }
+            override fun onDone() {
+                if (!current()) return
+                remoteRecognizer = null
+                recActive = false
+                if (pendingSend) finishPendingSend()
+                else main.postDelayed({ if (current()) startRecognizerCycle() }, 150)
+            }
+            override fun onError(code: String) {
+                if (!current()) return
+                // Keep the visible text, but never auto-send an incomplete transcription.
+                val partial = lastPartial.trim()
+                if (partial.isNotEmpty()) draft.append(if (draft.isEmpty()) "" else " ").append(partial)
+                lastPartial = ""
+                pendingTargetSid = null; pendingTargetListen = false; pendingGen++
+                stopListening(keepButton = true)
+                val detail = when (code) {
+                    "claude_login_required" -> "riapri Claude Code sul PC e verifica l’accesso"
+                    "microphone" -> "microfono non disponibile: controlla il collegamento audio"
+                    "busy" -> "servizio occupato, riprova tra poco"
+                    "disabled" -> "attiva il riconoscimento Claude nel relay"
+                    else -> "connessione vocale interrotta: controlla PC, Internet e Tailscale"
+                }
+                conversationStatus = "Non inviato: $detail. Bozza conservata. Tocca il microfono per riprovare."
+                LogBus.add("Riconoscimento Claude: $code")
+                buzz(300)
+            }
+        }
+        remoteRecognizer = speechFactory(listener)
+        remoteRecognizer?.start()
+    }
+
     private fun startRecognizerCycle() {
         if (!alive || !listening) return
         if (ttsGateActive()) {
@@ -4354,6 +4461,7 @@ class BridgeService : Service() {
             main.postDelayed({ if (alive && listening) startRecognizerCycle() }, 700); return
         }
         if (!scoWaitGate { startRecognizerCycle() }) return
+        if (useClaudeSpeech()) { startRemoteSpeech(); return }
         // v0.46 (аудит): храповик длины догадки залипал на пике ПРОШЛОЙ сессии распознавателя.
         // В шуме сессия кончается NO_MATCH, догадка выбрасывается, следующая считает с нуля и до
         // старого пика не дотягивает — рост текста больше не фиксируется, и потолок 30с стреляет
@@ -4366,7 +4474,7 @@ class BridgeService : Service() {
             setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle) {
                     recActive = false   // v0.46: сессия распознавателя завершилась
-                    if (!alive) return
+                    if (!alive || useClaudeSpeech()) return
                     val texts = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val t = texts?.firstOrNull()?.trim().orEmpty()
                     if (t.isNotEmpty()) { lastPartial = ""; onFinalText(t) }
@@ -4378,7 +4486,7 @@ class BridgeService : Service() {
 
                 override fun onError(error: Int) {
                     recActive = false   // v0.46: сессия распознавателя завершилась (ошибкой)
-                    if (!alive) return
+                    if (!alive || useClaudeSpeech()) return
                     if (pendingSend) { finishPendingSend(); return }
                     conversationStatus = when (error) {
                         SpeechRecognizer.ERROR_AUDIO -> "Errore microfono: controlla il collegamento audio"
@@ -4438,7 +4546,7 @@ class BridgeService : Service() {
                 // постоянно, и мы их выбрасывали. Теперь держим последнюю как страховку:
                 // в черновик она не пишется (иначе дубли с финалом), но по кнопке уйдёт.
                 override fun onPartialResults(partialResults: Bundle) {
-                    if (!alive) return
+                    if (!alive || useClaudeSpeech()) return
                     val t = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         ?.firstOrNull()?.trim().orEmpty()
                     if (t.isNotEmpty()) {
@@ -4832,6 +4940,7 @@ class BridgeService : Service() {
     // именно он держит медиакнопку за нами, а во сне после отправки кнопка — единственный
     // способ снова заговорить, не доставая телефон (v0.50).
     fun stopListening(keepButton: Boolean = false) {
+        cancelRemoteSpeech()
         if (!listening) return
         // v0.94-fix: приглашение говорить, ждущее очереди, теперь неправда — микрофон гаснет.
         // Остальные реплики («ушло», предупреждения) в очереди трогать нельзя.
@@ -5021,6 +5130,11 @@ class BridgeService : Service() {
                         if (postpones == 1) LogBus.add(tr("слышу голос — жду паузу…", "hearing voice — waiting for a pause…"))
                         autoSendTimer = this
                         main.postDelayed(this, 1500)
+                        return
+                    }
+                    if (remoteRecognizer != null) {
+                        cancelAutoSend()
+                        beginSend()
                         return
                     }
                     var msg = draft.toString().trim()

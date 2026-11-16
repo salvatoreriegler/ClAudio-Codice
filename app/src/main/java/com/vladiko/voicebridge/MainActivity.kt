@@ -1136,6 +1136,8 @@ class MainActivity : AppCompatActivity() {
             st.startsWith(tr("ОТПРАВЛЕНО", "SENT", "INVIATO")) -> tr("микрофон спит — кнопка гарнитуры тоже будит", "mic asleep — the headset button wakes it too", "microfono in attesa — lo riattivi anche dagli auricolari")
             else -> tr("долгий тап — выключить рацию", "long tap — turn the radio off", "tieni premuto per spegnere")
         }
+        if (running) hintText.text = "${svc!!.recognitionEngineName()} · ${hintText.text}"
+
         cancelBtn.visibility =
             if (running && (svc!!.isListening() || svc.hasPendingDictation())) View.VISIBLE else View.GONE
         talkBtn.visibility =
@@ -3573,6 +3575,13 @@ class MainActivity : AppCompatActivity() {
             { Cfg.handsFree }, { on ->
                 Cfg.handsFree = on
                 BridgeService.instance?.let { s -> if (on) s.startListening() else s.stopListening() }
+            }))
+        advBox.addView(switchRow("Riconoscimento Claude", "Usa Claude tramite il PC quando il relay lo supporta; disattiva per usare Android",
+            { Cfg.claudeSpeech }, { on ->
+                Cfg.claudeSpeech = on
+                BridgeService.instance?.let { service ->
+                    if (service.isListening()) { service.stopListening(); service.startListening() }
+                }
             }))
         advBox.addView(switchRow(tr("распознавание whisper", "whisper recognition", "riconoscimento Whisper"), tr("на твоём сервере; лучше в шуме, нужен whisper-бэкенд", "on your server; better in noise, needs a whisper backend", "sul tuo server; richiede Whisper installato"),
             { Cfg.whisper }, { on ->

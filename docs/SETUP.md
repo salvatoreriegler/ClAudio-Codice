@@ -103,3 +103,19 @@ Su Linux/macOS usa `./gradlew`. Il wrapper scarica Gradle e le dipendenze.
 L'APK è `app/build/outputs/apk/store/debug/app-store-debug.apk`, firmato con chiave di sviluppo. Per una release stabile serve una chiave dedicata, secondo la configurazione `keystore.properties` del progetto.
 
 Le verifiche automatiche non sostituiscono una prova con telefono, auricolari, relay e una sessione Claude Code reali.
+
+## Riconoscimento Claude tramite il PC
+
+Dalla it.4, copia **anche `server/claude-stt.js`** insieme a `relay.js`. Il relay deve girare con lo stesso utente del PC che ha eseguito l’accesso Claude Code. Nel `config.json` esistente aggiungi la proprietà seguente, preservando porta, token e tutte le altre impostazioni:
+
+```json
+"stt": { "provider": "claude" }
+```
+
+Riavvia il relay. Per impostazione predefinita legge `~/.claude/.credentials.json` (oppure la cartella indicata da `CLAUDE_CONFIG_DIR`). Puoi specificare un percorso locale con `stt.credentialsFile`. Questo percorso non deve essere condiviso con il telefono e il file non va incluso nel repository. Il processo necessita solo di leggerlo; il rinnovo dell’accesso resta gestito da Claude Code. Se l’accesso è scaduto o manca, l’app mostra un errore: apri Claude Code sul PC e verifica l’accesso, poi riprendi il microfono.
+
+Richiede OAuth con un account Claude.ai compatibile con la dettatura: una chiave API da sola non basta. Si tratta di un endpoint interno non ufficiale e può cambiare. L’audio passa da telefono → relay cifrato → Anthropic e non viene salvato dal nuovo bridge. Il relay non restituisce mai il token Claude al telefono. Conserva la protezione TLS e token del relay anche per il WebSocket `role=stt`.
+
+L’app aggiornata usa automaticamente Claude se il relay lo annuncia e la modalità Whisper è disattivata. La schermata indica **Claude · via PC**, poi **In ascolto** solo quando il microfono è pronto. Il riconoscimento Android si può selezionare disattivando **Riconoscimento Claude** nelle impostazioni avanzate; la modalità Whisper preesistente resta separata.
+
+Una disconnessione interrompe l’invio automatico e conserva il testo riconosciuto. Risolto il problema, tocca il microfono per riprendere. L’abbinamento esistente non va rifatto. La versione precedente dell’app continua a funzionare con il relay aggiornato.

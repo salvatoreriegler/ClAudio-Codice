@@ -45,6 +45,7 @@ object Cfg {
     // v0.35: dictation goes to server whisper (fallback: Android recognizer).
     // v0.67: default is flavor-dependent — personal true (owner runs whisper.cpp),
     // store false (a newcomer has no whisper backend; Android recognition works out of the box).
+    var claudeSpeech = true
     var whisper = BuildConfig.DEF_WHISPER
     // v0.63: recording source for the whisper recorder. VOICE_COMMUNICATION (true) is what
     // v0.35 introduced — and it is the prime suspect for the headset button dying during
@@ -86,6 +87,7 @@ object Cfg {
         // миграция: включённый solo — это набор из одного канала
         if (pickedSids.isEmpty() && soloSid.isNotEmpty()) pickedSids = soloSid
         voiceCues = p.getBoolean("voiceCues", true)
+        claudeSpeech = p.getBoolean("claudeSpeech", true)
         whisper = p.getBoolean("whisper", BuildConfig.DEF_WHISPER)
         micVoiceComm = p.getBoolean("micVoiceComm", true)
         routeAsButton = p.getBoolean("routeAsButton", false)
@@ -110,6 +112,7 @@ object Cfg {
             .putString("pickedSids", pickedSids)
             .putString("pickedNames", pickedNames)
             .putBoolean("voiceCues", voiceCues)
+            .putBoolean("claudeSpeech", claudeSpeech)
             .putBoolean("whisper", whisper)
             .putBoolean("micVoiceComm", micVoiceComm)
             .putBoolean("routeAsButton", routeAsButton)
