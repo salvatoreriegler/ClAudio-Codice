@@ -30,8 +30,8 @@ android {
         targetSdk = 35
         // Single source of truth for the version: the app reads BuildConfig.VERSION_NAME.
         // Bump BOTH on every delivered build (Play requires a growing versionCode).
-        versionCode = 150
-        versionName = "1.48-it.2"
+        versionCode = 151
+        versionName = "1.48-it.3"
     }
 
     // Two builds from one codebase. "personal" is the owner's build: his relay baked in
@@ -49,7 +49,7 @@ android {
             buildConfigField("String", "DEF_PIN", "\"${localProps.getProperty("relayPin", "")}\"")
             // The owner runs whisper.cpp on his relay — server-side recognition is his default.
             buildConfigField("boolean", "DEF_WHISPER", "true")
-            buildConfigField("boolean", "DEF_HANDSFREE", "false")
+            buildConfigField("boolean", "DEF_HANDSFREE", "true")
             buildConfigField("boolean", "DEF_AUTOSEND", "true")
         }
         // Hub test build: the owner's relay like "personal", but a separate app (own package,
@@ -73,7 +73,7 @@ android {
             // silently. Android's recognizer works out of the box and keeps the headset
             // button usable; whisper stays an opt-in in the advanced section.
             buildConfigField("boolean", "DEF_WHISPER", "false")
-            buildConfigField("boolean", "DEF_HANDSFREE", "false")
+            buildConfigField("boolean", "DEF_HANDSFREE", "true")
             buildConfigField("boolean", "DEF_AUTOSEND", "true")
         }
     }

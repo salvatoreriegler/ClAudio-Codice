@@ -117,6 +117,8 @@ class MainActivity : AppCompatActivity() {
     // v1.43 (слово юзера 16.10: «ходить по сессиям в интерфейсе не должно переключать, куда
     // уйдёт мой ответ»). Канал, открытый в ленте ТАПОМ ПО СТРОКЕ, — это чтение, не выбор
     // адресата. Пусто = лента идёт за адресатом, как раньше.
+    private lateinit var liveText: TextView
+    private lateinit var handsFreeBtn: TextView
     private var viewSid = ""
     private var lastTargetEpoch = -1   // v1.44: явная смена адресата в движке снимает viewSid
     private var feedBusy = false
@@ -132,7 +134,7 @@ class MainActivity : AppCompatActivity() {
     private var lastMsgs: List<InMsg> = emptyList()
     private var lastRows: List<Row> = emptyList()
     private var lastOffline = false
-    private var feedExpandAll = false            // v0.71: пузыри по 3 строки / все целиком
+    private var feedExpandAll = true            // v0.71: пузыри по 3 строки / все целиком
     private val feedExpanded = HashSet<String>() // точечные раскрытия тапом (XOR с общим)
     private val aliveMap = HashMap<String, Boolean>()
     private var sheetShowAll = false
@@ -460,11 +462,13 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        chipBtn = tv("▾ —", 13.5f, cPlay).apply {
+        chipBtn = tv("▾ Scegli una chat", 21f, cPlay).apply {
             background = GradientDrawable().apply {
                 setColor(0); setStroke(dp(1), cPlay); cornerRadius = dp(16).toFloat()
             }
-            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            minHeight = dp(64)
+            maxLines = 2
             contentDescription = tr("текущий канал — тап открывает список", "current channel — tap to open the list", "canale attuale — tocca per aprire l'elenco")
             setOnClickListener { openSheet() }
             // наследник старой кнопки «слушать крайнее»: свежайшее сообщение ЛЮБОЙ сессии
@@ -499,7 +503,18 @@ class MainActivity : AppCompatActivity() {
                 renderFeed(lastRows, lastOffline, force = true)
             }
         }
-        head.addView(chipBtn, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        handsFreeBtn = tv("Mani libere", 16f, cPlay, bold = true).apply {
+            minHeight = dp(56)
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener {
+                Cfg.handsFree = !Cfg.handsFree
+                if (Cfg.handsFree) { Cfg.autoSend = true; Cfg.voiceOff = false }
+                Cfg.save(this@MainActivity)
+                if (Cfg.handsFree) ensureService { it.startListening() }
+                paint()
+            }
+        }
+        head.addView(handsFreeBtn)
         head.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
         head.addView(expandAllBtn)
         voiceBtn = tv("🔈", 16f, cDim).apply {
@@ -654,13 +669,14 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(0, dp(8), 0, dp(6))
-            addView(circle, LinearLayout.LayoutParams(dp(148), dp(148)))
+            addView(circle, LinearLayout.LayoutParams(dp(96), dp(96)))
             addView(hintText, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(9) })
             addView(btnRow, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(6) })
         }
 
         // док: пауза · каналы · журнал
-        fun dockBtn(label: String, desc: String, onClick: () -> Unit) = tv(label, 12f, cDim).apply {
+        fun dockBtn(label: String, desc: String, onClick: () -> Unit) = tv(label, 17f, cDim).apply {
+            minHeight = dp(64)
             background = bordered(12)
             gravity = Gravity.CENTER
             setPadding(0, dp(9), 0, dp(9))
@@ -739,7 +755,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         val gap = { h: Int -> LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(h) } }
+        col.addView(chipBtn, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         col.addView(head)
+        liveText = tv("", 18f, cText).apply {
+            background = rounded(cCard, 12)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            maxLines = 5
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        col.addView(liveText, gap(4))
         col.addView(feedScroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         col.addView(bannerBtn, gap(6))
         col.addView(playerStrip, gap(6))
@@ -1030,7 +1054,16 @@ class MainActivity : AppCompatActivity() {
         // поля называет, куда уйдёт текст, чтобы расхождение было видно до отправки
         val hintNow = tr("в «", "to “", "a “") + feedName() + tr("»: написать…", "”: type…", "”: scrivi…")
         if (textEdit.hint?.toString() != hintNow) textEdit.hint = hintNow
-        chipBtn.text = "▾ " + name + viewing + (if (Cfg.pickedSids.isNotEmpty()) "  ·  " + Cfg.pickedSids.split(",").count { it.isNotBlank() } + tr(" в работе", " active", " attivi") else "")
+        chipBtn.text = "▾ " + if (tgtSid.isEmpty()) "Scegli una chat" else SessionNameMatcher.displayName(name)
+        handsFreeBtn.text = if (Cfg.handsFree) "✓ Mani libere" else "Mani libere: spente"
+        val live = svc?.liveTranscript().orEmpty()
+        val pending = svc?.pendingTranscript().orEmpty()
+        liveText.text = when {
+            live.isNotEmpty() -> "${svc?.conversationStatus?.takeIf { it.startsWith("Non inviato") } ?: "Tu · bozza"}\n${if (live.length > 240) "…" else ""}${live.takeLast(240)}"
+            pending.isNotEmpty() -> "${svc?.conversationStatus}\n$pending"
+            !running -> "Scegli una chat e tocca Parla per iniziare"
+            else -> svc?.conversationStatus?.ifEmpty { st } ?: st
+        }
 
         // микрофон-мьют в шапке
         val muted = running && svc!!.isMicMuted()
@@ -1222,7 +1255,7 @@ class MainActivity : AppCompatActivity() {
             val merged = if (raw == null) null else {
                 Feed.rememberIn(this, sid, msgs.map {
                     Feed.In(it.msgid, it.ts, it.proj,
-                        it.texts.map { t -> t.second }.filter { t -> t.isNotBlank() }.joinToString(" ").trim().take(900),
+                        it.texts.map { t -> t.second }.filter { t -> t.isNotBlank() }.joinToString(" ").trim(),
                         it.audios.filter { a -> a.second.isNotEmpty() }, it.bytes)
                 })
                 mergeCached(sid, msgs)
@@ -1284,8 +1317,12 @@ class MainActivity : AppCompatActivity() {
                 if (m.proj.isEmpty()) m.proj = ev.optString("proj")
                 val cx = ev.optString("ctx")
                 if (cx.isNotEmpty() && m.ctx.isEmpty()) m.ctx = cx
-                m.texts.add(Pair(ev.optInt("part", 1), ev.optString("text")))
-                m.audios.add(Pair(ev.optInt("part", 1), ev.optString("audio")))
+                if (ev.optString("type") == "transcript") {
+                    m.texts.clear(); m.texts.add(Pair(0, ev.optString("text")))
+                } else if (m.texts.none { it.first == 0 }) {
+                    m.texts.add(Pair(ev.optInt("part", 1), ev.optString("text")))
+                }
+                if (ev.optString("audio").isNotEmpty()) m.audios.add(Pair(ev.optInt("part", 1), ev.optString("audio")))
                 m.bytes += ev.optLong("bytes")
             }
             for (m in byId.values) {
@@ -1404,7 +1441,7 @@ class MainActivity : AppCompatActivity() {
                 offline -> tr("нет связи с релеем — лента появится, когда связь вернётся", "no connection to the relay — the feed will appear when it returns", "nessuna connessione al relay — la chat apparirà alla riconnessione")
                 else -> tr("пока тихо.\nнажми круг и скажи что-нибудь — разговор появится здесь", "quiet so far.\ntap the circle and say something — the conversation will show up here", "Nessun messaggio.\nTocca il cerchio e parla: la conversazione apparirà qui.")
             }
-            feedBox.addView(tv(msg, 12f, cFaint).apply {
+            feedBox.addView(tv(msg, 17f, cFaint).apply {
                 gravity = Gravity.CENTER
                 setPadding(dp(16), dp(40), dp(16), dp(16))
             }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -1451,7 +1488,7 @@ class MainActivity : AppCompatActivity() {
                 if (r.out) gravity = Gravity.END
             }
             capRow.addView(cap, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-            if (!r.out && r.inMsg != null) {
+            if (!r.out && r.inMsg != null && r.inMsg.audios.isNotEmpty()) {
                 val m = r.inMsg
                 capRow.addView(tv("▶", 11f, cPlay).apply {
                     setPadding(dp(10), 0, dp(2), 0)
@@ -1465,7 +1502,7 @@ class MainActivity : AppCompatActivity() {
                 contentDescription = tr("копировать текст сообщения", "copy message text", "copia il testo del messaggio")
                 setOnClickListener { copyDialog(r.text) }
             }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-            val body = tv(r.text, 13f, cText).apply {
+            val body = tv(r.text, 18f, cText).apply {
                 maxWidth = maxW
                 setPadding(0, dp(2), 0, 0)
             }
@@ -1645,6 +1682,19 @@ class MainActivity : AppCompatActivity() {
         sheetOverlay.visibility = View.VISIBLE
     }
 
+    private fun selectConversation(sid: String) {
+        sheetOverlay.visibility = View.GONE
+        viewSid = ""
+        val svc = BridgeService.instance
+        if (svc == null || !BridgeService.running) {
+            Cfg.replyTarget = sid
+            Cfg.save(this)
+        }
+        ensureService { it.replyToSession(sid) }
+        refreshFeed(true)
+        paint()
+    }
+
     private fun openSheet() {
         sheetShowAll = false
         sheetMode = "channels"
@@ -1787,7 +1837,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val shown = if (sheetShowAll) list else list.take(8)
+        val shown = list
         for (e in shown) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -1796,16 +1846,16 @@ class MainActivity : AppCompatActivity() {
             }
             val solo = BridgeService.instance?.picked()?.contains(e.sid)
                 ?: Cfg.pickedSids.split(",").contains(e.sid)
-            val target = !solo && Cfg.replyTarget == e.sid
+            val target = Cfg.replyTarget == e.sid
             val deaf = aliveMap[e.sid] == false
             val unheard = e.lastTs > prefs.getLong("heard_${e.sid}", 0L)
             // имя — главное на строке: крупнее, во всю ширину, метки минимальные
             val nm = tv(
-                (if (unheard) "● " else "") + e.proj.ifEmpty { e.sid.take(8) } +
+                (if (target) "✓ " else "") + SessionNameMatcher.displayName(e.proj).ifEmpty { e.sid.take(8) } +
                     (if (hubOf(e.sid) == "laptop") tr(" · ноутбук", " · laptop") else ""),
-                15f, if (unheard) cText else cDim
+                22f, cText
             ).apply {
-                maxLines = 1
+                maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }
             // v0.79 (слово юзера: «хочу понимать — канал работает или уже отработал»).
@@ -1823,39 +1873,6 @@ class MainActivity : AppCompatActivity() {
             }
             // v0.82 (вопрос юзера: «объясни, что значат иконки»): подписи СЛОВАМИ.
             // Значки на ходу нечитаемы и требуют памяти — слово объясняет себя само.
-            val replyBtn = tv(tr("ответить", "reply", "rispondi"), 11.5f, if (target) cPlay else cDim).apply {
-                background = bordered(8)
-                setPadding(dp(8), dp(4), dp(8), dp(4))
-                contentDescription = tr("отвечать в этот канал прямо сейчас", "reply to this channel right now", "rispondi subito a questo canale")
-                setOnClickListener {
-                    sheetOverlay.visibility = View.GONE
-                    viewSid = e.sid   // v1.43: отвечаю туда — туда и смотрю
-                    ensureService { it.replyToSession(e.sid) }
-                    refreshFeed(true)
-                }
-            }
-            // v0.82 (слово юзера: «хочу выбрать пару каналов из пяти и ВИДЕТЬ, какие»).
-            // Набор: пусто = слышу всех; иначе слышны ровно отмеченные.
-            val soloBtn = tv(if (solo) tr("✓ в работе", "✓ active", "✓ attivo") else tr("в работу", "make active", "attiva"), 11.5f, if (solo) cPlay else cDim).apply {
-                background = if (solo) rounded(cAccSoft, 8) else bordered(8)
-                setPadding(dp(8), dp(4), dp(8), dp(4))
-                contentDescription = tr("добавить канал в работу или убрать из неё", "add the channel to active or remove it", "aggiungi o rimuovi il canale dagli attivi")
-                setOnClickListener {
-                    val svc = BridgeService.instance
-                    if (svc != null && BridgeService.running) svc.togglePicked(e.sid)
-                    else {
-                        val set = Cfg.pickedSids.split(",").filter { it.isNotEmpty() }.toMutableSet()
-                        if (!set.remove(e.sid)) set.add(e.sid)
-                        Cfg.pickedSids = set.joinToString(",")
-                        Cfg.soloSid = if (set.size == 1) set.first() else ""
-                        Cfg.save(this@MainActivity)
-                    }
-                    rebuildSheet()
-                    refreshFeed(true)
-                }
-            }
-            // v0.86 (боевое, обычный смартфон: «имя канала съедается кнопками, места нет»):
-            // ДВЕ строки. Верхняя — имя во всю ширину и статус, нижняя — кнопки.
             val line1 = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1864,32 +1881,18 @@ class MainActivity : AppCompatActivity() {
                     leftMargin = dp(8)
                 })
             }
-            val line2 = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(6), 0, 0)
-                addView(soloBtn)
-                addView(replyBtn, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) })
-            }
             row.orientation = LinearLayout.VERTICAL
             row.addView(line1, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-            row.addView(line2, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            row.minimumHeight = dp(88)
+            row.background = if (target) rounded(cAccSoft, 12) else bordered(12)
+            row.setPadding(dp(14), dp(16), dp(14), dp(16))
+            row.addView(tv((if (e.proj.contains("WSL")) "WSL · " else "PC · ") +
+                if (target) "chat selezionata" else "tocca per parlare qui", 15f, cDim))
             // v1.43 (решение юзера 16.10, отменяет v1.18 «выбор на экране главнее последнего
             // говорившего»): тап по строке = ОТКРЫТЬ канал в ленте и только. Адресат и ручное
             // закрепление не трогаются; сменить адресата можно одним жестом — «ответить».
             // Тап по строке канала, который и так адресат, возвращает ленту за адресатом.
-            row.setOnClickListener {
-                val tgt = BridgeService.instance?.takeIf { BridgeService.running }?.replyTargetSid() ?: Cfg.replyTarget
-                val nm0 = e.proj.ifEmpty { e.sid.take(8) }
-                viewSid = if (e.sid == tgt) "" else e.sid
-                LogBus.add(
-                    if (viewSid.isEmpty()) tr("смотрю «$nm0» — туда же уйдёт ответ", "viewing “$nm0” — replies go there too")
-                    else tr("смотрю «$nm0»; ответ уйдёт по-прежнему адресату — сменить: «ответить»", "viewing “$nm0”; replies still go to the target — to change: “reply”")
-                )
-                sheetOverlay.visibility = View.GONE
-                refreshFeed(true)
-            }
-            // v0.82 (слово юзера про тестовые каналы: «удаляй их, пусть не мозолят глаза»)
+            row.setOnClickListener { selectConversation(e.sid) }
             row.setOnLongClickListener {
                 if (BridgeService.instance?.picked()?.contains(e.sid) == true)
                     BridgeService.instance?.togglePicked(e.sid)
@@ -1902,7 +1905,7 @@ class MainActivity : AppCompatActivity() {
             sheetList.addView(View(this).apply { setBackgroundColor(cLine) },
                 LinearLayout.LayoutParams(MATCH_PARENT, 1))
         }
-        if (!sheetShowAll && list.size > 8) {
+        if (shown.size < list.size) {
             sheetList.addView(tv(tr("ещё ${list.size - 8}…", "${list.size - 8} more…", "altri ${list.size - 8}…"), 12.5f, cDim).apply {
                 setPadding(dp(4), dp(11), dp(4), dp(6))
                 setOnClickListener { sheetShowAll = true; rebuildSheet() }
@@ -1918,9 +1921,9 @@ class MainActivity : AppCompatActivity() {
         }
         sheetList.addView(allRow)
         sheetList.addView(tv(
-            tr("«в работу» — кого слышу (можно несколько каналов)\n", "“active” — whom I hear (several channels allowed)\n", "“attivo” — quali canali ascoltare (anche più di uno)\n") +
-                tr("тап по строке — только посмотреть ленту, адресат не меняется\n", "tap a row — just view its feed, the target stays\n", "tocca una riga per leggere la chat: il destinatario non cambia\n") +
-                tr("«ответить» — говорить ЭТОМУ каналу · долгий тап — убрать из списка", "“reply” — talk to THIS channel · long press — remove from list", "“rispondi” — parla a QUESTO canale · tieni premuto per rimuoverlo"),
+            tr("«в работу» — кого слышу (можно несколько каналов)\n", "“active” — whom I hear (several channels allowed)\n", "Di’ il nome della chat per cambiare canale.\n") +
+                tr("тап по строке — только посмотреть ленту, адресат не меняется\n", "tap a row — just view its feed, the target stays\n", "tocca il nome: voce, testo e risposte passano a quella chat\n") +
+                tr("«ответить» — говорить ЭТОМУ каналу · долгий тап — убрать из списка", "“reply” — talk to THIS channel · long press — remove from list", "Oppure di’: passa a SECURDOC 1"),
             9.5f, cFaint
         ).apply {
             setPadding(dp(4), dp(4), dp(4), 0)

@@ -14,6 +14,12 @@
     <!-- v0.36: тема всегда тёмная (палитра захардкожена углём) — DayNight в светлой системной
          теме давал тёмный текст на тёмном фоне у неперекрашенных виджетов.
          allowBackup=false: токен и пин релея не должны уезжать в облачный бэкап. -->
+    <!-- Android 11+ filters service discovery unless these intents are visible. -->
+    <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+    </queries>
+
     <application
         android:label="ClAudio Codice"
         android:icon="@mipmap/ic_launcher"

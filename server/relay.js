@@ -300,6 +300,27 @@ function handler(req, res) {
       }, 32 * 1024);
     }
 
+    // Text must reach the screen before speech synthesis (or even if TTS fails).
+    if (req.method === 'POST' && url.pathname === '/reply') {
+      if (isHub) return send(403, { error: 'phone/session token required' });
+      return readBody(req, (buf) => {
+        let body;
+        try { body = JSON.parse(buf.toString('utf8')); } catch (_) { return send(400, { error: 'json body' }); }
+        if (typeof body.session !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(body.session) ||
+            typeof body.text !== 'string' || !body.text.trim() || body.text.length > MSG_MAX ||
+            typeof body.msgid !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(body.msgid))
+          return send(400, { error: 'invalid reply' });
+        const evt = { type: 'transcript', session: body.session, text: body.text,
+          proj: String(body.proj || '').slice(0, 100), ctx: String(body.ctx || '').slice(0, 1000),
+          msgid: body.msgid, ts: Date.now(), part: 0, parts: 0, bytes: 0 };
+        if (!(history.get(evt.session) || []).some(e => e.type === 'transcript' && e.msgid === evt.msgid)) {
+          recordHistory(evt);
+          broadcastPhones(evt);
+        }
+        send(200, { ok: true });
+      }, 512 * 1024);
+    }
+
     if (req.method === 'POST' && url.pathname === '/hook') {
       const sid = url.searchParams.get('session') || 'unknown';
       const part = parseInt(url.searchParams.get('part') || '1', 10);

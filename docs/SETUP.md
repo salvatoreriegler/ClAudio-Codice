@@ -69,7 +69,7 @@ Il nome della cartella di lavoro o il titolo personalizzato della sessione ident
 
 Installa l'APK di sviluppo **ClAudio Codice**. Scansiona il QR o apri il nuovo link; controlla il server nella conferma. In alternativa incolla `indirizzo|token|impronta` in **impostazioni → avanzate**.
 
-Concedi il microfono quando richiesto. Attendi una risposta dalla sessione collegata, poi premi **canali → rispondi**. Per inviare dicendo «invia» con Android, attiva **modalità a mani libere**; il pulsante centrale funziona anche senza.
+Concedi il microfono quando richiesto. Attendi una risposta dalla sessione collegata, poi tocca il nome in **canali**. La **modalità a mani libere** predefinita consente invio dopo una pausa o dicendo «invia» con Android; il pulsante centrale funziona anche senza.
 
 ## Whisper facoltativo
 

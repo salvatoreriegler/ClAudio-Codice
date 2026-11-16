@@ -77,18 +77,28 @@ def release_lock():
         pass
 
 # ── dedup: never voice the exact same message twice in a row (kills double-fire) ──
-def is_duplicate(speech):
-    h = hashlib.md5(speech.encode("utf-8", "ignore")).hexdigest()
+def is_duplicate(identity):
     try:
-        if os.path.exists(LASTSENT) and open(LASTSENT, encoding="utf-8").read().strip() == h:
-            return True
+        with open(LASTSENT, encoding="utf-8") as f:
+            return identity in json.load(f)
+    except Exception:
+        return False
+
+
+def remember_sent(identity):
+    try:
+        try:
+            with open(LASTSENT, encoding="utf-8") as f:
+                ids = json.load(f)
+            if not isinstance(ids, list): ids = []
+        except Exception:
+            ids = []
+        ids = (ids + [identity])[-100:]
+        with open(LASTSENT, "w", encoding="utf-8") as f:
+            json.dump(ids, f)
     except Exception:
         pass
-    try:
-        open(LASTSENT, "w", encoding="utf-8").write(h)
-    except Exception:
-        pass
-    return False
+
 
 def to_speech(md):
     t = md
@@ -166,6 +176,25 @@ def bridge_push(ogg, sid, proj, part_text, part_i, parts_n, msgid="", ctx=""):
     except Exception as e:
         log("bridge push fail: %s" % e)
     return False
+
+def push_text(cfg, sid, proj, text, msgid, ctx):
+    """Publish the complete readable reply before requesting any synthesized audio."""
+    import ssl
+    import urllib.request
+    import urllib.parse
+    try:
+        ca = cfg.get("cacert")
+        tls = ssl.create_default_context(cafile=os.path.join(DIR, "bridge", ca)) if ca else ssl.create_default_context()
+        body = json.dumps(dict(session=sid, proj=proj, text=text[:100000], msgid=msgid, ctx=ctx)).encode("utf-8")
+        req = urllib.request.Request(cfg["url"] + "/reply?" + urllib.parse.urlencode({"token": cfg["token"]}),
+                                     data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, context=tls, timeout=15) as response:
+            return response.status == 200
+    except Exception as exc:
+        # Never include request URLs/tokens in diagnostic logs.
+        log("text push failed: " + type(exc).__name__)
+        return False
+
 
 def main():
     if not os.path.exists(TOGGLE):
@@ -310,17 +339,23 @@ def main():
                 ctx = " ".join(cand.split())[:160]
                 if ctx:
                     break
+    if os.path.exists(os.path.join(DIR, "native", sid + ".json")):
+        ctx = ""
     if not text or not text.strip():
         return
 
     speech = to_speech(text)[:HARD_CAP]
     if not speech.strip():
         return
-    if is_duplicate(speech):
+    # Equal text in two turns/chats is legitimate; only deduplicate the same reply.
+    reply = objs[ai_idx] if ai_idx is not None else {}
+    identity = hashlib.sha256((sid + ":" + str(reply.get("uuid") or reply.get("timestamp") or ai_idx) + ":" + text).encode("utf-8")).hexdigest()
+    if is_duplicate(identity):
         log("skip duplicate"); return
 
     parts = chunk(speech, MAX_CHARS)
-    msgid = str(int(time.time() * 1000))   # groups this reply's parts into one message
+    msgid = identity   # groups this reply's parts into one message
+    text_sent = push_text(cfg, sid, proj, text, msgid, ctx)
     sent = 0
     for part_i, part in enumerate(parts, 1):
         if not part.strip():
@@ -360,6 +395,8 @@ def main():
                         os.remove(p)
                 except Exception:
                     pass
+    if text_sent or sent == len(parts):
+        remember_sent(identity)
     log("sent %d/%d voice part(s), %d chars" % (sent, len(parts), len(speech)))
 
 if __name__ == "__main__":

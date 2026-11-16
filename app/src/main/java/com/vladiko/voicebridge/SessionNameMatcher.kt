@@ -40,6 +40,10 @@ object SessionNameMatcher {
             .joinToString(" ") { spokenNumbers[it] ?: it }
     }
 
+    fun displayName(value: String): String =
+        if (bridgePrefix.containsMatchIn(value.trim())) value.trim().replace(idSuffix, "").replace(bridgePrefix, "")
+        else value.trim()
+
     private fun compact(value: String) = words(value).replace(" ", "")
     private fun numbers(value: String) = digits.findAll(value).map { it.value }.toList()
     private data class Entry(val candidate: Candidate, val title: String, val aliases: Set<String>)

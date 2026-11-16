@@ -16,9 +16,17 @@ Fork italiano di [Claudio Code di 1nspectorCat / VladiKo](https://github.com/1ns
 
 Questa prima edizione traduce il percorso principale. I registri tecnici e le schermate sperimentali dell'hub conservano parte dei testi inglesi; commenti e documentazione interna ereditati possono essere in russo. Il server dell'hub multi-provider non è incluso nell'upstream: questa versione collega le sessioni di **Claude Code**.
 
+## Conversazione dal telefono (1.48-it.3)
+
+Configura e avvia l’app da fermo. Apri **Canali** e tocca il nome della chat: voce, testo e conversazione visualizzata hanno lo stesso destinatario. Puoi poi cambiare dicendo «Passa a SECURDOC 1». Il destinatario resta selezionato finché non lo cambi.
+
+Le parole riconosciute appaiono subito nella bozza a schermo. Dopo l’invio, il messaggio resta nella conversazione; gli errori sono visibili. Se manca una chat, la bozza viene conservata. Le righe dei canali sono grandi e mostrano il nome senza prefissi tecnici.
+
+Con relay e hook aggiornati, il testo della risposta arriva prima della sintesi vocale. L’audio parte automaticamente; il riconoscimento si sospende durante la riproduzione per non ritrascriverla. **Mani libere** è disattivabile dalla schermata principale. Il riconoscimento continuo usa microfono e batteria finché non lo metti in pausa o interrompi la comunicazione.
+
 ## Comandi vocali
 
-Pronuncia il comando come frase autonoma. Con il riconoscitore Android, attiva **modalità a mani libere** per inviare a voce.
+Pronuncia il comando come frase autonoma. La modalità **Mani libere** è attiva per impostazione predefinita: dopo aver avviato il microfono, fai una pausa di circa 6 secondi per inviare. Il microfono riprende automaticamente dopo invio e risposta; «Fine comunicazione» lo ferma.
 
 | Comando | Effetto |
 | --- | --- |
@@ -54,7 +62,9 @@ Servono Android 8+, Claude Code sul computer e un server Linux con Node.js 18+. 
 ## Verifiche
 
 ```bash
-node --test server/test/*.test.js
+cd server && npm ci && npm test
+cd ..
+python desktop/test_readback.py
 ./gradlew :app:testStoreDebugUnitTest :app:assembleStoreDebug
 ```
 

@@ -15,7 +15,7 @@ object Cfg {
     var url = DEF_URL
     var token = ""
     var pin = DEF_PIN
-    var handsFree = false
+    var handsFree = BuildConfig.DEF_HANDSFREE
     // voice off: the service stays connected (feed, channels, typing work), nothing plays, mic never rises
     var voiceOff = false
     var autoSend = true     // v0.5: hands-free auto-send after silence (warn beep 4s, send 2s later)
@@ -64,6 +64,12 @@ object Cfg {
         url = p.getString("url", DEF_URL) ?: DEF_URL
         token = p.getString("token", "") ?: ""
         pin = p.getString("pin", DEF_PIN) ?: DEF_PIN
+        // One-time repair of the old store default: auto-send previously did nothing
+        // unless the hidden hands-free setting was enabled too. Never start the mic here.
+        if (BuildConfig.FLAVOR == "store" && !p.getBoolean("handsFreeMigration151", false)) {
+            p.edit().putBoolean("handsFree", true).putBoolean("autoSend", true)
+                .putBoolean("handsFreeMigration151", true).apply()
+        }
         handsFree = p.getBoolean("handsFree", BuildConfig.DEF_HANDSFREE)
         voiceOff = p.getBoolean("voiceOff", false)
         autoSend = p.getBoolean("autoSend", BuildConfig.DEF_AUTOSEND)
